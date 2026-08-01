@@ -15,16 +15,27 @@ import { TrendCharts } from "./trend-charts";
 import { BreakdownTable } from "./breakdown-table";
 import { ForecastPanel } from "./forecast-panel";
 import { TerritoryPanel } from "./territory-panel";
-import { FileSpreadsheet, Building2, LineChart, MapPin, BarChart3 } from "lucide-react";
+import { LiveFeedsPanel } from "./live-feeds-panel";
+import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
+import {
+  FileSpreadsheet,
+  Building2,
+  LineChart,
+  MapPin,
+  BarChart3,
+  Radio,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 const defaultPreset = PRESETS.find((p) => p.id === "ytd-2026")!;
 const defaultRange = defaultPreset.range!;
 
-type TabId = "performance" | "forecast" | "territory";
+type TabId = "performance" | "feeds" | "forecast" | "territory";
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
+  { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "forecast", label: "Forecast", icon: LineChart },
   { id: "territory", label: "Territory", icon: MapPin },
 ];
@@ -33,6 +44,7 @@ export function Dashboard() {
   const [preset, setPreset] = useState<DatePreset>("ytd-2026");
   const [range, setRange] = useState<DateRange>(defaultRange);
   const [tab, setTab] = useState<TabId>("performance");
+  const { data: feeds } = useConstructionFeeds(true);
 
   const metrics = useMemo(() => computeMetrics(range), [range]);
   const series = useMemo(() => chartSeries(range), [range]);
@@ -68,9 +80,18 @@ export function Dashboard() {
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <MetricBadge metrics={metrics} />
-              <span className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] md:inline-flex">
+              <Badge
+                variant={feeds.live ? "success" : "secondary"}
+                className="hidden gap-1 sm:inline-flex"
+                title={feeds.signal.narrative}
+              >
+                <Radio className="size-3" />
+                {feeds.live ? "Feeds live" : "Feeds cached"}
+                <span className="tabular opacity-80">{feeds.signal.compositeIndex.toFixed(0)}</span>
+              </Badge>
+              <span className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] lg:inline-flex">
                 <FileSpreadsheet className="size-3.5" />
-                Q2 2026 report data
+                Q2 2026 + FRED/BLS
               </span>
             </div>
           </div>
@@ -91,6 +112,9 @@ export function Dashboard() {
                 >
                   <Icon className="size-4" />
                   {label}
+                  {id === "feeds" && feeds.live && (
+                    <span className="size-1.5 rounded-full bg-[var(--color-success)]" />
+                  )}
                   {tab === id && (
                     <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[var(--color-primary)]" />
                   )}
@@ -113,8 +137,8 @@ export function Dashboard() {
                     {rangeLabel}
                   </h1>
                   <p className="mt-1 max-w-xl text-sm text-[var(--color-fg-muted)]">
-                    Interactive view of Ascent Buildings contract revenue, growth, volume churn, and gross margin.
-                    Figures update with the date selection — data from the Q2 2026 bookings workbook.
+                    Interactive view of Ascent Buildings contract revenue, growth, volume churn, and gross
+                    margin. Live construction feeds inform the Forecast tab.
                   </p>
                 </div>
                 <p className="text-xs text-[var(--color-fg-subtle)] tabular">
@@ -148,12 +172,13 @@ export function Dashboard() {
             </>
           )}
 
+          {tab === "feeds" && <LiveFeedsPanel />}
           {tab === "forecast" && <ForecastPanel />}
           {tab === "territory" && <TerritoryPanel />}
 
           <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between">
             <p>Ascent Buildings LLC · Portland, TN · Bookings through June 2026</p>
-            <p>For corporate review · Forecast is a planning model, not a guarantee</p>
+            <p>FRED + BLS construction feeds · Forecast is a planning model</p>
           </footer>
         </main>
       </div>

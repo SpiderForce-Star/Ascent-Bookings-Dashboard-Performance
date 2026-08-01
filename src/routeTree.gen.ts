@@ -10,33 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiConstructionFeedsRouteImport } from './routes/api/construction-feeds'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiConstructionFeedsRoute = ApiConstructionFeedsRouteImport.update({
+  id: '/api/construction-feeds',
+  path: '/api/construction-feeds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/construction-feeds': typeof ApiConstructionFeedsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/construction-feeds': typeof ApiConstructionFeedsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/construction-feeds': typeof ApiConstructionFeedsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/construction-feeds'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/construction-feeds'
+  id: '__root__' | '/' | '/api/construction-feeds'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiConstructionFeedsRoute: typeof ApiConstructionFeedsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/construction-feeds': {
+      id: '/api/construction-feeds'
+      path: '/api/construction-feeds'
+      fullPath: '/api/construction-feeds'
+      preLoaderRoute: typeof ApiConstructionFeedsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiConstructionFeedsRoute: ApiConstructionFeedsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

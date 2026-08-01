@@ -15,8 +15,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buildForecast, commercialSegments, type ForecastScenario } from "@/data/forecast";
+import { signalToForecastBias } from "@/data/construction-feeds";
+import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
-import { LineChart, Sparkles, Building2 } from "lucide-react";
+import { LineChart, Sparkles, Building2, Radio } from "lucide-react";
 
 function ChartTip({
   active,
@@ -24,7 +26,13 @@ function ChartTip({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string; dataKey: string; payload?: { isActual?: boolean; marketIndex?: number } }>;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+    dataKey: string;
+    payload?: { isActual?: boolean; marketIndex?: number };
+  }>;
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
@@ -64,7 +72,17 @@ const SCENARIOS: ForecastScenario[] = ["conservative", "base", "optimistic"];
 
 export function ForecastPanel() {
   const [scenario, setScenario] = useState<ForecastScenario>("base");
-  const forecast = useMemo(() => buildForecast(scenario), [scenario]);
+  const { data: feeds } = useConstructionFeeds(true);
+
+  const liveBias = 1 + signalToForecastBias(feeds.signal);
+  const forecast = useMemo(
+    () =>
+      buildForecast(scenario, {
+        liveBias,
+        liveCompositeIndex: feeds.signal.compositeIndex,
+      }),
+    [scenario, liveBias, feeds.signal.compositeIndex],
+  );
 
   const chartData = forecast.months.map((m) => ({
     key: m.key,
@@ -85,8 +103,9 @@ export function ForecastPanel() {
             Forward bookings outlook
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
-            Model blends 2023–2026 seasonality, recent growth, and a commercial building activity index for the
-            Southeast / Midwest service area. Switch scenarios for executive planning ranges.
+            Model blends 2023–2026 seasonality, recent growth, and{" "}
+            <strong className="font-medium text-[var(--color-fg)]">live construction feeds</strong> (FRED
+            nonres + BLS employment/PPI). Switch scenarios for executive planning ranges.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -105,12 +124,19 @@ export function ForecastPanel() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-xs">
+        <Radio className={cn("size-3.5", feeds.live ? "text-[var(--color-success)]" : "text-[var(--color-fg-subtle)]")} />
+        <span className="font-medium">
+          Live feed bias: {((liveBias - 1) * 100).toFixed(1)}%
+        </span>
+        <span className="text-[var(--color-fg-muted)]">
+          · Composite index {feeds.signal.compositeIndex.toFixed(1)} ({feeds.live ? "live" : "cached"})
+        </span>
+        <span className="text-[var(--color-fg-subtle)]">· See Market feeds tab for series detail</span>
+      </div>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          label="2026 YTD actual"
-          value={formatCurrency(forecast.ytdActual, true)}
-          sub="Jan–Jun booked"
-        />
+        <Metric label="2026 YTD actual" value={formatCurrency(forecast.ytdActual, true)} sub="Jan–Jun booked" />
         <Metric
           label="H2 2026 forecast"
           value={formatCurrency(forecast.h2_2026, true)}
@@ -138,7 +164,9 @@ export function ForecastPanel() {
             </CardTitle>
             <CardDescription>{forecast.description}</CardDescription>
           </div>
-          <Badge variant="outline">Offline model · sample market index</Badge>
+          <Badge variant={feeds.live ? "success" : "outline"}>
+            {feeds.live ? "Live feeds linked" : "Cached market index"}
+          </Badge>
         </CardHeader>
         <CardContent className="h-80 pt-0">
           <ResponsiveContainer width="100%" height="100%">
@@ -181,7 +209,12 @@ export function ForecastPanel() {
                 x="Jun 2026"
                 stroke="var(--color-border-strong)"
                 strokeDasharray="4 4"
-                label={{ value: "Actual → forecast", position: "insideTopRight", fontSize: 10, fill: "var(--color-fg-subtle)" }}
+                label={{
+                  value: "Actual → forecast",
+                  position: "insideTopRight",
+                  fontSize: 10,
+                  fill: "var(--color-fg-subtle)",
+                }}
               />
               <Area
                 yAxisId="left"
@@ -245,7 +278,9 @@ export function ForecastPanel() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-[var(--color-fg-muted)]">
-                  <span className="tabular font-medium text-[var(--color-fg)]">{(seg.share * 100).toFixed(0)}%</span>
+                  <span className="tabular font-medium text-[var(--color-fg)]">
+                    {(seg.share * 100).toFixed(0)}%
+                  </span>
                   {" · "}
                   {seg.note}
                 </p>

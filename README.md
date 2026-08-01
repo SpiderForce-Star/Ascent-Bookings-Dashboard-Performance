@@ -2,26 +2,46 @@
 
 **Corporate review build** for [Ascent Buildings LLC](https://github.com/SpiderForce-Star/Ascent-Bookings-Dashboard-Performance).
 
-Interactive executive dashboard for **bookings, margin, sales forecast, and market territory**, seeded with data from the **2nd Quarterly 2026 Bookings / Margin Report**.
+Interactive executive dashboard for **bookings, margin, live construction market feeds, sales forecast, and market territory**, seeded with data from the **2nd Quarterly 2026 Bookings / Margin Report**.
 
 | | |
 | --- | --- |
 | **Plant** | Portland, Tennessee |
 | **Service area** | ~600-mile radius — AR, MO, IL, IN, OH, WV, PA, VA, NC, SC, Upper FL, Southeast into East TX |
 | **Data period** | Actuals 2023 – June 2026; forecast Jul 2026 – Dec 2027 |
+| **Live feeds** | FRED (construction put-in-place, permits) + BLS (employment, industrial building PPI) |
 | **Stack** | React 19 · TypeScript · Vite · TanStack Start · Tailwind · Recharts |
 
 ---
 
 ## Executive summary
 
-Three review tabs:
+Four review tabs:
 
-1. **Performance** — KPI cards (revenue, YoY growth, volume churn, gross margin), date-range filters, trend charts, monthly + segment breakdown tables. All figures recompute with the selected window.
-2. **Forecast** — Planning model for H2 2026 and FY 2027 with **Conservative / Base / Optimistic** scenarios. Uses historical seasonality, recent growth, and a commercial building activity index. Commercial segment demand mix (warehouse, industrial, ag, public, etc.) supports the narrative.
-3. **Territory** — Schematic of the Portland, TN footprint, state demand scores, pipeline indices, and top markets for commercial metal building sales.
+1. **Performance** — KPI cards (revenue, YoY growth, volume churn, gross margin), date-range filters, trend charts, monthly + segment breakdown tables.
+2. **Market feeds** — **Live** national construction indicators from FRED and BLS, composite commercial index, MoM/YoY moves, history charts. Offline cache fallback if APIs are unreachable.
+3. **Forecast** — H2 2026 / FY 2027 planning model with Conservative / Base / Optimistic scenarios. **Automatically biased by live feed composite** (nonres spending, employment, materials PPI).
+4. **Territory** — Portland, TN footprint schematic, state demand scores, pipeline indices.
 
-> Forecast and territory demand scores are **offline planning models** for discussion. They are not live econometric feeds or contractual commitments.
+> Forecast and territory demand scores are **planning models**. Live feeds are national public statistics — not a substitute for project-level Dodge/ConstructConnect bid lists.
+
+---
+
+## Live construction feeds
+
+| Series | Source | Use |
+| --- | --- | --- |
+| `TLNRESCONS` / `PNRESCONS` | FRED | Private nonresidential construction put-in-place |
+| `TTLCONS` | FRED | Total construction spending |
+| `PERMIT` | FRED | Building permits (residential context) |
+| `CES2000000001` | BLS | Construction employment (SA) |
+| `PCU236211236211` | BLS | Industrial building construction PPI |
+| `WPU081` | BLS | Lumber & wood products PPI |
+
+**API endpoint (app):** `GET /api/construction-feeds`  
+Refreshes on load and via the **Refresh** control. Results cached ~5 minutes at the edge when deployed.
+
+No API keys required for FRED CSV export or BLS public API (rate limits apply).
 
 ---
 
@@ -34,21 +54,7 @@ npm run build    # production build (Vercel-ready)
 npm run typecheck
 ```
 
-Requires **Node 22+**. Dependencies are defined in `package.json`.
-
----
-
-## What’s in the data
-
-- Monthly **sales** and **gross margin** (2023–Jun 2026) from the quarterly workbook graphs  
-- 2026 YTD **product / plant segments** (Buildings, TN Fab, Central States, Buy-Outs, IMPs, Engineering, etc.)  
-- **Volume churn** = share of prior-year revenue not retained on YoY-declining months  
-- **Forecast** anchored on trailing-12 run-rate × seasonality × market index × scenario multiplier  
-
-Source workbooks (also under `attachments/` when present):
-
-- `2026 2nd Quarterly Bookings Report.xlsx`
-- `June 2026 Bookings Report.xlsx`
+Requires **Node 22+**.
 
 ---
 
@@ -56,11 +62,12 @@ Source workbooks (also under `attachments/` when present):
 
 ```
 src/
-  components/dashboard/   # Performance, forecast, territory UI
-  data/                   # Bookings, forecast model, territory
-  routes/                 # TanStack Start routes
-  styles.css              # Design tokens (Ascent brand)
-public/logo.jpg           # Ascent Buildings logo
+  components/dashboard/   # Performance, feeds, forecast, territory UI
+  data/                   # Bookings, forecast model, territory, feed types/cache
+  hooks/                  # useConstructionFeeds
+  lib/construction-feeds.server.ts  # FRED + BLS fetchers
+  routes/api/construction-feeds.ts  # Live API route
+public/logo.jpg
 ```
 
 ---
@@ -68,10 +75,11 @@ public/logo.jpg           # Ascent Buildings logo
 ## Corporate review checklist
 
 - [ ] Confirm KPI definitions (revenue = total contract; GM = report gross margin)  
-- [ ] Validate H2 2026 base-case forecast vs sales leadership outlook  
-- [ ] Align territory demand scores with regional manager input  
-- [ ] Decide whether to wire live CRM / ERP feeds next phase  
-- [ ] Optional: private deploy (Vercel) for always-on executive link  
+- [ ] Review live feed composite vs sales leadership gut-check  
+- [ ] Validate H2 2026 base-case forecast  
+- [ ] Align territory demand scores with regional managers  
+- [ ] Optional next: Dodge/ConstructConnect project feeds (requires commercial license)  
+- [ ] Optional: private Vercel deploy for always-on executive URL  
 
 ---
 

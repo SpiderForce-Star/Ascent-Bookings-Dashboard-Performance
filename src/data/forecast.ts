@@ -1,6 +1,6 @@
 /**
  * Sales forecast engine + commercial construction market signals.
- * Offline sample model for executive review — not a live econometric feed.
+ * Accepts optional live-feed bias from FRED/BLS construction indicators.
  * Plant: Portland, TN · Primary radius: ~600 miles.
  */
 
@@ -36,6 +36,8 @@ export interface ForecastSummary {
   growthVs2025: number;
   impliedGmPct: number;
   months: ForecastMonth[];
+  /** Live feed multiplier applied (1 = none) */
+  liveBiasApplied: number;
 }
 
 /** Average monthly seasonality from 2023–2025 actuals (share of annual / 1/12). */
@@ -68,7 +70,6 @@ function trendGrowth(): number {
   const y25 = sum(2025);
   const g1 = y23 > 0 ? (y24 - y23) / y23 : 0;
   const g2 = y24 > 0 ? (y25 - y24) / y24 : 0;
-  // Weight recent year more
   return g1 * 0.35 + g2 * 0.65;
 }
 
@@ -81,9 +82,8 @@ function recentGmPct(): number {
 }
 
 /**
- * Commercial construction activity index by month (sample).
- * Reflects typical SE US non-res construction seasonality + mild expansion 2026–27.
- * 100 = neutral; >100 supports higher bookings.
+ * Static commercial construction activity index by month (planning baseline).
+ * Overridden for near-term months when live composite is provided.
  */
 const MARKET_INDEX: Record<string, number> = {
   "2026-6": 104,
@@ -113,10 +113,7 @@ const SCENARIO_MULTIPLIER: Record<ForecastScenario, number> = {
   optimistic: 1.1,
 };
 
-const SCENARIO_META: Record<
-  ForecastScenario,
-  { label: string; description: string }
-> = {
+const SCENARIO_META: Record<ForecastScenario, { label: string; description: string }> = {
   conservative: {
     label: "Conservative",
     description: "Softer SE non-res pipeline (−8% vs base); slower private industrial starts.",
@@ -131,14 +128,25 @@ const SCENARIO_META: Record<
   },
 };
 
-export function buildForecast(scenario: ForecastScenario = "base"): ForecastSummary {
+export interface ForecastOptions {
+  /** Multiplier from live feeds, e.g. 1.02 = +2% */
+  liveBias?: number;
+  /** Live composite index (100 = neutral) — blends into near-term marketIndex */
+  liveCompositeIndex?: number;
+}
+
+export function buildForecast(
+  scenario: ForecastScenario = "base",
+  options: ForecastOptions = {},
+): ForecastSummary {
   const seasonality = computeSeasonality();
   const t12 = trailing12Avg();
   const growth = trendGrowth();
   const gmPct = recentGmPct();
   const mult = SCENARIO_MULTIPLIER[scenario];
+  const liveBias = options.liveBias ?? 1;
+  const liveComposite = options.liveCompositeIndex;
 
-  // Anchor annualized run-rate
   const annualized = t12 * 12 * (1 + Math.max(growth, -0.05) * 0.5);
 
   const actual2026 = monthlyRecords.filter((r) => r.year === 2026 && r.sales > 0);
@@ -147,7 +155,6 @@ export function buildForecast(scenario: ForecastScenario = "base"): ForecastSumm
 
   const months: ForecastMonth[] = [];
 
-  // Actuals first
   for (const r of actual2026) {
     months.push({
       key: `${r.month.slice(0, 3)} ${r.year}`,
@@ -163,14 +170,20 @@ export function buildForecast(scenario: ForecastScenario = "base"): ForecastSumm
     });
   }
 
-  // Forecast Jul 2026 – Dec 2027
   for (const year of [2026, 2027]) {
     for (let mi = 0; mi < 12; mi++) {
       if (year === 2026 && mi <= 5) continue;
       const seas = seasonality[mi];
-      const mkt = MARKET_INDEX[`${year}-${mi}`] ?? 100;
+      let mkt = MARKET_INDEX[`${year}-${mi}`] ?? 100;
+      // Blend live composite into H2 2026 months
+      if (liveComposite != null && year === 2026 && mi >= 6) {
+        const w = mi === 6 ? 0.7 : mi <= 8 ? 0.45 : 0.25;
+        mkt = mkt * (1 - w) + liveComposite * w;
+      } else if (liveComposite != null && year === 2027 && mi <= 2) {
+        mkt = mkt * 0.85 + liveComposite * 0.15;
+      }
       const yearLift = year === 2027 ? 1 + Math.max(growth, 0.02) * 0.6 : 1;
-      const baseMonth = (annualized / 12) * seas * (mkt / 100) * yearLift * mult;
+      const baseMonth = (annualized / 12) * seas * (mkt / 100) * yearLift * mult * liveBias;
       const rev = Math.round(baseMonth * 100) / 100;
       const gm = rev * gmPct;
       months.push({
@@ -182,7 +195,7 @@ export function buildForecast(scenario: ForecastScenario = "base"): ForecastSumm
         gm,
         gmPct,
         seasonality: seas,
-        marketIndex: mkt,
+        marketIndex: Math.round(mkt * 10) / 10,
         isActual: false,
       });
     }
@@ -194,9 +207,16 @@ export function buildForecast(scenario: ForecastScenario = "base"): ForecastSumm
   const fullYear_2027 = months.filter((m) => m.year === 2027).reduce((s, m) => s + m.revenue, 0);
   const y25 = monthlyRecords.filter((r) => r.year === 2025).reduce((s, r) => s + r.sales, 0);
 
+  const meta = SCENARIO_META[scenario];
+  const liveNote =
+    liveBias !== 1 || liveComposite != null
+      ? " Adjusted by live FRED/BLS construction feeds."
+      : "";
+
   return {
     scenario,
-    ...SCENARIO_META[scenario],
+    label: meta.label,
+    description: meta.description + liveNote,
     h2_2026,
     fullYear_2026,
     fullYear_2027,
@@ -204,6 +224,7 @@ export function buildForecast(scenario: ForecastScenario = "base"): ForecastSumm
     growthVs2025: y25 > 0 ? (fullYear_2026 - y25) / y25 : 0,
     impliedGmPct: fullYear_2026 > 0 ? (ytdGm + h2.reduce((s, m) => s + m.gm, 0)) / fullYear_2026 : gmPct,
     months,
+    liveBiasApplied: liveBias,
   };
 }
 
