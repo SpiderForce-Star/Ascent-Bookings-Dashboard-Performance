@@ -1,0 +1,107 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --font-sans: "DM Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Instrument Sans", "DM Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-bg: #f4f2ef;
+  --color-bg-elevated: #ffffff;
+  --color-bg-subtle: #ebe8e3;
+  --color-bg-muted: #e2ddd6;
+  --color-fg: #141210;
+  --color-fg-muted: #5c574f;
+  --color-fg-subtle: #8a847a;
+  --color-border: #d9d3ca;
+  --color-border-strong: #c4bdb2;
+
+  --color-primary: #c8102e;
+  --color-primary-hover: #a50d26;
+  --color-primary-fg: #ffffff;
+  --color-primary-soft: #fce8eb;
+
+  --color-ink: #1a1a1a;
+  --color-success: #1f7a4c;
+  --color-success-soft: #e6f4ec;
+  --color-danger: #b42318;
+  --color-danger-soft: #fef3f2;
+  --color-warn: #b54708;
+  --color-warn-soft: #fffaeb;
+  --color-info: #175cd3;
+  --color-info-soft: #eff8ff;
+
+  --color-chart-1: #c8102e;
+  --color-chart-2: #1a1a1a;
+  --color-chart-3: #5c574f;
+  --color-chart-4: #8b7355;
+  --color-chart-5: #3d5a80;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --shadow-sm: 0 1px 2px rgb(20 18 16 / 0.04);
+  --shadow-md: 0 4px 16px rgb(20 18 16 / 0.06);
+  --shadow-lg: 0 12px 32px rgb(20 18 16 / 0.08);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01" on, "cv11" on;
+    line-height: 1.5;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-nums {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
