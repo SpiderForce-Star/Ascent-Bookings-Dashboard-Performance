@@ -16,14 +16,15 @@ Interactive executive dashboard for **bookings, margin, live construction market
 
 ## Executive summary
 
-Four review tabs:
+Five review tabs:
 
 1. **Performance** — KPI cards (revenue, YoY growth, volume churn, gross margin), date-range filters, trend charts, monthly + segment breakdown tables.
 2. **Market feeds** — **Live** national construction indicators from FRED and BLS, composite commercial index, MoM/YoY moves, history charts. Offline cache fallback if APIs are unreachable.
-3. **Forecast** — H2 2026 / FY 2027 planning model with Conservative / Base / Optimistic scenarios. **Automatically biased by live feed composite** (nonres spending, employment, materials PPI).
-4. **Territory** — Portland, TN footprint schematic, state demand scores, pipeline indices.
+3. **Dodge pipeline** — Project-level commercial opportunities via the **Dodge Construction Network REST API** (OAuth 2.0). Demo SE pipeline when credentials are not configured.
+4. **Forecast** — H2 2026 / FY 2027 planning model with Conservative / Base / Optimistic scenarios. **Automatically biased by live feed composite** (nonres spending, employment, materials PPI).
+5. **Territory** — Portland, TN footprint schematic, state demand scores, pipeline indices.
 
-> Forecast and territory demand scores are **planning models**. Live feeds are national public statistics — not a substitute for project-level Dodge/ConstructConnect bid lists.
+> Forecast and territory demand scores are **planning models**. FRED/BLS are national public statistics. **Dodge project data requires an enterprise license** ([request API access](https://www.construction.com/apis/)).
 
 ---
 
@@ -45,6 +46,46 @@ No API keys required for FRED CSV export or BLS public API (rate limits apply).
 
 ---
 
+
+---
+
+## Dodge Construction Network API
+
+Dodge is **enterprise-only** (REST + OAuth 2.0). Public docs: [construction.com/apis](https://www.construction.com/apis/).
+
+| Capability | Detail |
+| --- | --- |
+| Protocol | REST over HTTPS, JSON |
+| Auth | OAuth 2.0 client credentials **or** bearer token / API key |
+| Data | Projects, companies/contacts, project documents |
+| Filters | Geography, stage, valuation, building type, bid date, trade |
+
+### Configure live Dodge
+
+1. Talk to Dodge for API credentials ([Talk to an expert](https://www.construction.com/apis/)).
+2. Copy `.env.example` → `.env` and set:
+
+```bash
+DODGE_API_BASE_URL=https://api.construction.com/v1   # use URL Dodge issues
+DODGE_CLIENT_ID=...
+DODGE_CLIENT_SECRET=...
+# optional:
+# DODGE_TOKEN_URL=...
+# DODGE_ACCESS_TOKEN=...
+# DODGE_API_KEY=...
+```
+
+3. Restart the server. Open **Dodge pipeline** — status badge should switch from **Demo pipeline** to **Dodge live**.
+
+### App endpoints
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/dodge/projects` | Territory-filtered projects (maxMiles, minValuation query params) |
+| `GET /api/construction-feeds` | FRED + BLS national market series |
+
+Without Dodge credentials, `/api/dodge/projects` returns a **demo** pipeline sized to the Portland, TN ~600-mile commercial footprint (labeled demo — not licensed Dodge content).
+
 ## Quick start
 
 ```bash
@@ -62,12 +103,15 @@ Requires **Node 22+**.
 
 ```
 src/
-  components/dashboard/   # Performance, feeds, forecast, territory UI
-  data/                   # Bookings, forecast model, territory, feed types/cache
-  hooks/                  # useConstructionFeeds
+  components/dashboard/   # Performance, feeds, Dodge, forecast, territory UI
+  data/                   # Bookings, forecast, territory, feeds, Dodge types/demo
+  hooks/                  # useConstructionFeeds, useDodgeProjects
   lib/construction-feeds.server.ts  # FRED + BLS fetchers
-  routes/api/construction-feeds.ts  # Live API route
+  lib/dodge.server.ts               # Dodge OAuth + project client
+  routes/api/construction-feeds.ts
+  routes/api/dodge/projects.ts
 public/logo.jpg
+.env.example              # Dodge + DB env template
 ```
 
 ---
@@ -78,7 +122,7 @@ public/logo.jpg
 - [ ] Review live feed composite vs sales leadership gut-check  
 - [ ] Validate H2 2026 base-case forecast  
 - [ ] Align territory demand scores with regional managers  
-- [ ] Optional next: Dodge/ConstructConnect project feeds (requires commercial license)  
+- [ ] Obtain Dodge API credentials and set `DODGE_*` env vars for live pipeline  
 - [ ] Optional: private Vercel deploy for always-on executive URL  
 
 ---

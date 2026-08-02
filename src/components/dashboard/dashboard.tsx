@@ -16,6 +16,7 @@ import { BreakdownTable } from "./breakdown-table";
 import { ForecastPanel } from "./forecast-panel";
 import { TerritoryPanel } from "./territory-panel";
 import { LiveFeedsPanel } from "./live-feeds-panel";
+import { DodgePanel } from "./dodge-panel";
 import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import {
   FileSpreadsheet,
@@ -24,6 +25,7 @@ import {
   MapPin,
   BarChart3,
   Radio,
+  GanttChartSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -31,11 +33,12 @@ import { Badge } from "@/components/ui/badge";
 const defaultPreset = PRESETS.find((p) => p.id === "ytd-2026")!;
 const defaultRange = defaultPreset.range!;
 
-type TabId = "performance" | "feeds" | "forecast" | "territory";
+type TabId = "performance" | "feeds" | "dodge" | "forecast" | "territory";
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "feeds", label: "Market feeds", icon: Radio },
+  { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
   { id: "forecast", label: "Forecast", icon: LineChart },
   { id: "territory", label: "Territory", icon: MapPin },
 ];
@@ -89,9 +92,9 @@ export function Dashboard() {
                 {feeds.live ? "Feeds live" : "Feeds cached"}
                 <span className="tabular opacity-80">{feeds.signal.compositeIndex.toFixed(0)}</span>
               </Badge>
-              <span className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] lg:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] xl:inline-flex">
                 <FileSpreadsheet className="size-3.5" />
-                Q2 2026 + FRED/BLS
+                Q2 2026 · FRED/BLS · Dodge-ready
               </span>
             </div>
           </div>
@@ -137,8 +140,8 @@ export function Dashboard() {
                     {rangeLabel}
                   </h1>
                   <p className="mt-1 max-w-xl text-sm text-[var(--color-fg-muted)]">
-                    Interactive view of Ascent Buildings contract revenue, growth, volume churn, and gross
-                    margin. Live construction feeds inform the Forecast tab.
+                    Bookings & margin, live market signals, Dodge project pipeline, and territory forecast for
+                    Ascent Buildings.
                   </p>
                 </div>
                 <p className="text-xs text-[var(--color-fg-subtle)] tabular">
@@ -173,12 +176,13 @@ export function Dashboard() {
           )}
 
           {tab === "feeds" && <LiveFeedsPanel />}
+          {tab === "dodge" && <DodgePanel />}
           {tab === "forecast" && <ForecastPanel />}
           {tab === "territory" && <TerritoryPanel />}
 
           <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between">
             <p>Ascent Buildings LLC · Portland, TN · Bookings through June 2026</p>
-            <p>FRED + BLS construction feeds · Forecast is a planning model</p>
+            <p>FRED + BLS feeds · Dodge API-ready · Forecast is a planning model</p>
           </footer>
         </main>
       </div>

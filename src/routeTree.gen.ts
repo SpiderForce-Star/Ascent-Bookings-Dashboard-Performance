@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiConstructionFeedsRouteImport } from './routes/api/construction-feeds'
+import { Route as ApiDodgeProjectsRouteImport } from './routes/api/dodge/projects'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ApiConstructionFeedsRoute = ApiConstructionFeedsRouteImport.update({
   path: '/api/construction-feeds',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDodgeProjectsRoute = ApiDodgeProjectsRouteImport.update({
+  id: '/api/dodge/projects',
+  path: '/api/dodge/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/construction-feeds': typeof ApiConstructionFeedsRoute
+  '/api/dodge/projects': typeof ApiDodgeProjectsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/construction-feeds': typeof ApiConstructionFeedsRoute
+  '/api/dodge/projects': typeof ApiDodgeProjectsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/construction-feeds': typeof ApiConstructionFeedsRoute
+  '/api/dodge/projects': typeof ApiDodgeProjectsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/construction-feeds'
+  fullPaths: '/' | '/api/construction-feeds' | '/api/dodge/projects'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/construction-feeds'
-  id: '__root__' | '/' | '/api/construction-feeds'
+  to: '/' | '/api/construction-feeds' | '/api/dodge/projects'
+  id: '__root__' | '/' | '/api/construction-feeds' | '/api/dodge/projects'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiConstructionFeedsRoute: typeof ApiConstructionFeedsRoute
+  ApiDodgeProjectsRoute: typeof ApiDodgeProjectsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiConstructionFeedsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/dodge/projects': {
+      id: '/api/dodge/projects'
+      path: '/api/dodge/projects'
+      fullPath: '/api/dodge/projects'
+      preLoaderRoute: typeof ApiDodgeProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiConstructionFeedsRoute: ApiConstructionFeedsRoute,
+  ApiDodgeProjectsRoute: ApiDodgeProjectsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
