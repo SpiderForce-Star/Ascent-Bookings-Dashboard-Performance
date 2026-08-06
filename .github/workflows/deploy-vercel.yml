@@ -1,40 +1,69 @@
+# Optional: deploy from GitHub Actions after you connect Vercel.
+#
+# Easier path for most teams: use Vercel’s GitHub integration instead of this file.
+#   1. Open https://vercel.com/new
+#   2. Click "Install" for the GitHub app (screenshot you saw)
+#   3. Import SpiderForce-Star/Ascent-Bookings-Dashboard-Performance
+#   4. Deploy — every push to main auto-deploys
+#
+# Use this workflow only if you prefer CLI deploy via secrets:
+#   Repo → Settings → Secrets and variables → Actions
+#     VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+#
 name: Deploy to Vercel
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
-  workflow_dispatch:
-
-# Requires repo secrets (add once in GitHub → Settings → Secrets):
-#   VERCEL_TOKEN          from https://vercel.com/account/tokens
-#   VERCEL_ORG_ID         from .vercel/project.json after `vercel link`
-#   VERCEL_PROJECT_ID     from .vercel/project.json after `vercel link`
-#
-# Or skip this workflow and use one-click import:
-# https://vercel.com/new/clone?repository-url=https://github.com/SpiderForce-Star/Ascent-Bookings-Dashboard-Performance
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
+      - name: Check Vercel secrets
+        id: check
+        env:
+          # Map secrets into env — empty if not configured (safe; never print values)
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          ORG: ${{ secrets.VERCEL_ORG_ID }}
+          PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ORG" ] || [ -z "$PROJECT" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Vercel secrets not configured — skipping Actions deploy."
+            echo "Use the Vercel GitHub integration instead:"
+            echo "  https://vercel.com/new"
+            echo "  → Install GitHub app → Import this repository"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        if: steps.check.outputs.skip == 'false'
 
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip == 'false'
         with:
           node-version: "22"
           cache: npm
 
       - name: Install dependencies
+        if: steps.check.outputs.skip == 'false'
         run: npm ci
 
       - name: Pull Vercel env
+        if: steps.check.outputs.skip == 'false'
         run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Build
+        if: steps.check.outputs.skip == 'false'
         run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -42,10 +71,9 @@ jobs:
           VITE_AUTH_ENABLED: "false"
 
       - name: Deploy prebuilt
-        id: deploy
+        if: steps.check.outputs.skip == 'false'
         run: |
           url=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed: $url"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
