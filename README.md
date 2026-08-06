@@ -108,13 +108,20 @@ Or import the repo: **[vercel.com/new](https://vercel.com/new)** → Import `Spi
 | Output | Nitro writes `.vercel/output` (Build Output API) |
 | Region | `iad1` (US East) |
 
-**Environment variables (optional):**
 
-| Variable | Recommended |
-| --- | --- |
-| `VITE_AUTH_ENABLED` | `false` for public executive review (no login wall) |
-| `DODGE_API_BASE_URL` / `DODGE_CLIENT_ID` / `DODGE_CLIENT_SECRET` | Live Dodge pipeline |
-| `DATABASE_URL` | Neon Postgres if you want shared server DB |
+### Environment variables
+
+Full guide: **[docs/VERCEL_ENV.md](./docs/VERCEL_ENV.md)** · template: [`.env.vercel.example`](./.env.vercel.example)
+
+| Variable | Value | Required? |
+| --- | --- | --- |
+| `VITE_AUTH_ENABLED` | `false` | **Yes** for public exec review |
+| `SITE_URL` | `https://dashboard.ascentbuildings.com` | Recommended |
+| `DODGE_*` | from Dodge | Optional (demo pipeline if unset) |
+| `DATABASE_URL` | Neon Postgres URL | Optional (PGLite if unset) |
+
+In Vercel: **Settings → Environment Variables** → add → **Redeploy**.
+
 
 ### CLI
 
