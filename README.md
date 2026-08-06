@@ -124,6 +124,23 @@ vercel login
 vercel --prod
 ```
 
+
+---
+
+## Custom domain
+
+**Target URL:** `https://dashboard.ascentbuildings.com`
+
+DNS for `ascentbuildings.com` is on **GoDaddy**. Full walkthrough (Vercel + GoDaddy CNAME + SSL):
+
+→ **[docs/CUSTOM_DOMAIN.md](./docs/CUSTOM_DOMAIN.md)**
+
+| Record | Name | Points to |
+| --- | --- | --- |
+| CNAME | `dashboard` | `cname.vercel-dns.com` (or the target Vercel shows) |
+
+Leave apex/`www` alone so the marketing site at [ascentbuildings.com](https://ascentbuildings.com) is unchanged.
+
 ## Quick start
 
 ```bash
