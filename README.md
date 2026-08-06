@@ -86,6 +86,44 @@ DODGE_CLIENT_SECRET=...
 
 Without Dodge credentials, `/api/dodge/projects` returns a **demo** pipeline sized to the Portland, TN ~600-mile commercial footprint (labeled demo — not licensed Dodge content).
 
+
+---
+
+## Deploy (Vercel)
+
+Production build is Nitro → Vercel Build Output API (already verified with `npm run build`).
+
+### One-click (recommended)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSpiderForce-Star%2FAscent-Bookings-Dashboard-Performance&project-name=ascent-bookings-dashboard&repository-name=Ascent-Bookings-Dashboard-Performance&env=VITE_AUTH_ENABLED&envDescription=Set%20VITE_AUTH_ENABLED%3Dfalse%20for%20public%20executive%20access%20without%20login.&envLink=https%3A%2F%2Fgithub.com%2FSpiderForce-Star%2FAscent-Bookings-Dashboard-Performance%23deploy-vercel)
+
+Or import the repo: **[vercel.com/new](https://vercel.com/new)** → Import `SpiderForce-Star/Ascent-Bookings-Dashboard-Performance`.
+
+**Build settings** (auto-detected from `vercel.json`):
+
+| Setting | Value |
+| --- | --- |
+| Build command | `npm run build` |
+| Install command | `npm install` |
+| Output | Nitro writes `.vercel/output` (Build Output API) |
+| Region | `iad1` (US East) |
+
+**Environment variables (optional):**
+
+| Variable | Recommended |
+| --- | --- |
+| `VITE_AUTH_ENABLED` | `false` for public executive review (no login wall) |
+| `DODGE_API_BASE_URL` / `DODGE_CLIENT_ID` / `DODGE_CLIENT_SECRET` | Live Dodge pipeline |
+| `DATABASE_URL` | Neon Postgres if you want shared server DB |
+
+### CLI
+
+```bash
+npm i -g vercel
+vercel login
+vercel --prod
+```
+
 ## Quick start
 
 ```bash
