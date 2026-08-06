@@ -10,6 +10,7 @@ node_modules/.nitro
 .env
 .env.*
 !.env.example
+!.env.vercel.example
 .tanstack
 screenshots
 .playwright
