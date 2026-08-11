@@ -39,10 +39,9 @@ import {
 } from "@/data/steel-forecast";
 import { buildSteelStateSheets } from "@/data/steel-state-sheets";
 import {
-  downloadStateSteelSheetsExcel,
   downloadSteelCsv,
-  downloadSteelExcel,
   downloadSteelPdf,
+  exportSteelForecastWorkbook,
 } from "@/lib/steel-export";
 import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -408,15 +407,39 @@ export function SteelForecastPanel() {
       {view === "states" && (
         <StateSheetsView
           sheets={stateSheets}
-          onExport={() => downloadStateSteelSheetsExcel(stateSheets, effectiveRisks)}
+          onExport={() =>
+            void exportSteelForecastWorkbook({
+              forecastRows: adjusted,
+              risks: effectiveRisks,
+              stateSummaries: stateSheets,
+              focusCategory: category,
+              modelSource,
+            })
+          }
         />
       )}
       {view === "export" && (
         <ExportView
-          onExcel={() => downloadSteelExcel(adjusted, effectiveRisks, category, modelSource)}
+          onExcel={() =>
+            void exportSteelForecastWorkbook({
+              forecastRows: adjusted,
+              risks: effectiveRisks,
+              stateSummaries: stateSheets,
+              focusCategory: category,
+              modelSource,
+            })
+          }
           onPdf={() => downloadSteelPdf(adjusted, effectiveRisks, category, modelSource)}
           onCsv={() => downloadSteelCsv(adjusted, category)}
-          onStatePack={() => downloadStateSteelSheetsExcel(stateSheets, effectiveRisks)}
+          onStatePack={() =>
+            void exportSteelForecastWorkbook({
+              forecastRows: adjusted,
+              risks: effectiveRisks,
+              stateSummaries: stateSheets,
+              focusCategory: category,
+              modelSource,
+            })
+          }
           category={category}
           modelSource={modelSource}
         />
@@ -1122,7 +1145,7 @@ function ExportView({
         <CardContent className="flex flex-wrap gap-2 pt-0">
           <Button type="button" onClick={onExcel} className="gap-1.5">
             <Download className="size-3.5" />
-            Excel workbook
+            Excel workbook (ExcelJS)
           </Button>
           <Button type="button" variant="secondary" onClick={onPdf} className="gap-1.5">
             <Download className="size-3.5" />
@@ -1134,14 +1157,14 @@ function ExportView({
           </Button>
           <Button type="button" variant="secondary" onClick={onStatePack} className="gap-1.5">
             <Download className="size-3.5" />
-            State sheets pack (Excel)
+            Full pack (forecast + states)
           </Button>
         </CardContent>
       </Card>
       <p className="text-[11px] text-[var(--color-fg-subtle)]">
-        Excel includes Executive Summary, Category Forecast, Full Forecast Detail, and Base/Adjusted wide
-        pivots. PDF is landscape executive format with risk settings + focus table. State pack is a
-        multi-sheet workbook for VP → regional rep distribution.
+        ExcelJS multi-sheet pack: Cover/Methodology · Overview (Base vs Adjusted) · All Categories · per-category
+        sheets · Sensitivity/Tornado · State Summaries · one sheet per territory state. Headers use Ascent red
+        (#c8102e), freeze panes, currency/percent formats, risk-uplift highlighting. Offline client-side only.
       </p>
     </div>
   );

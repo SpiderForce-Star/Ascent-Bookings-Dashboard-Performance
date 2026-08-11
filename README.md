@@ -47,8 +47,18 @@ Ported from [ascent-steel-forecast](https://github.com/SpiderForce-Star/ascent-s
 | Risk engine | Tariff pass-through 0.38, dumping pressure −0.12, geo sensitivity 0.55, vol mean/osc, category multipliers, horizon weighting, clamp [−18%, +28%] |
 | Views | Overview · Category deep dive · Sensitivity (tornado + tariff one-way) · State steel sheets · Export |
 | Upload | Client-side Excel parse of Month \| Price \| MoM blocks (same layouts as the original models) |
-| Export | Excel workbook, PDF executive brief, CSV, multi-sheet **state pack** for the field |
+| Export | **ExcelJS** multi-sheet workbook (Cover/Methodology, Overview, Categories, Sensitivity/Tornado, per-state sheets), PDF executive brief, CSV |
 | Live bias | Optional FRED/BLS composite nudge on geo premium / demand vol |
+
+### Excel pack structure (ExcelJS)
+
+1. **Cover Methodology** — Ascent branding, risk assumptions, engine coefficients, methodology footnote  
+2. **Overview** — Overall Base vs Adjusted 24-month table + KPI summary (frozen header, `$#,##0.00` / `0.00%`)  
+3. **All Categories** + one sheet per major PEMB category  
+4. **Sensitivity Tornado** — low/high factor swings for the focus category  
+5. **State Summaries** + **ST XX** sheets — demand, talking points, recommended action for VP → rep handoff  
+
+Header rows: fill `#c8102e`, white bold text. Risk uplift ≥3% highlighted in soft red.
 
 ### VP use of steel state sheets
 
