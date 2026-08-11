@@ -18,6 +18,7 @@ import {
   DEMO_DODGE_COMPANIES,
   DEMO_DODGE_PROJECTS,
   DODGE_TERRITORY_STATES,
+  inferProductLine,
   summarizeProjects,
   type DodgeBuildingType,
   type DodgeCompany,
@@ -167,12 +168,19 @@ function mapProject(raw: Record<string, unknown>, index: number): DodgeProject {
 
   const state = (str("state", "stateCode", "state_code", "region") ?? "").toUpperCase().slice(0, 2);
   const city = str("city", "municipality", "locationCity") ?? "—";
+  const buildingType = normalizeBuildingType(typeRaw);
+  const trades = Array.isArray(raw.trades)
+    ? (raw.trades as unknown[]).map(String)
+    : str("trades")
+      ? str("trades")!.split(/[,;]/).map((t) => t.trim())
+      : [];
 
   return {
     id: str("id", "projectId", "project_id", "dodgeReportNumber") ?? `live-${index}`,
     title: str("title", "name", "projectName", "project_name") ?? "Untitled project",
     stage,
-    buildingType: normalizeBuildingType(typeRaw),
+    buildingType,
+    productLine: inferProductLine(buildingType, trades),
     valuation: num("valuation", "value", "estimatedValue", "projectValue", "constructionValue"),
     city,
     state,
@@ -182,11 +190,7 @@ function mapProject(raw: Record<string, unknown>, index: number): DodgeProject {
     owner: str("owner", "ownerName", "owner_name"),
     architect: str("architect", "architectName"),
     gc: str("gc", "generalContractor", "general_contractor"),
-    trades: Array.isArray(raw.trades)
-      ? (raw.trades as unknown[]).map(String)
-      : str("trades")
-        ? str("trades")!.split(/[,;]/).map((t) => t.trim())
-        : [],
+    trades,
     source: "dodge_live",
     notes: str("notes", "description", "summary") ?? "",
   };

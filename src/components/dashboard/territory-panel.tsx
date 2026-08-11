@@ -26,15 +26,18 @@ export function TerritoryPanel() {
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
           Production facility in {plant.name}. Primary targeting radius ~{plant.radiusMiles} miles across the
-          Southeast and lower Midwest — Arkansas through the Carolinas, Upper Florida, and East Texas.
+          Southeast and lower Midwest — Arkansas through the Carolinas, Upper Florida, and East Texas. Product
+          focus: <strong className="font-medium text-[var(--color-fg)]">PEMB / CSI Division 13</strong> metal
+          building systems.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat icon={Factory} label="Plant" value="Portland, TN" />
         <Stat icon={Radius} label="Primary radius" value={`${plant.radiusMiles} mi`} />
         <Stat icon={MapPin} label="States covered" value={String(totals.stateCount)} />
         <Stat icon={Navigation} label="Avg demand score" value={totals.avgDemand.toFixed(0)} />
+        <Stat icon={Factory} label="Avg PEMB share" value={`${(totals.avgPembShare * 100).toFixed(0)}%`} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
@@ -95,18 +98,20 @@ export function TerritoryPanel() {
           <CardHeader>
             <CardTitle>State demand & pipeline</CardTitle>
             <CardDescription>
-              Relative commercial demand scores and next-12-month pipeline index (sample for planning)
+              Relative commercial demand, pipeline index, and PEMB share (planning estimates — not booked
+              revenue)
             </CardDescription>
           </CardHeader>
           <CardContent className="max-h-[420px] overflow-y-auto pt-0">
-            <table className="w-full min-w-[480px] border-collapse text-sm">
+            <table className="w-full min-w-[520px] border-collapse text-sm">
               <thead className="sticky top-0 bg-[var(--color-bg-elevated)]">
                 <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
                   <th className="pb-2 pr-2 font-medium">State</th>
                   <th className="pb-2 pr-2 font-medium">Region</th>
                   <th className="pb-2 pr-2 text-right font-medium">Miles</th>
                   <th className="pb-2 pr-2 text-right font-medium">Demand</th>
-                  <th className="pb-2 text-right font-medium">Pipeline</th>
+                  <th className="pb-2 pr-2 text-right font-medium">Pipeline</th>
+                  <th className="pb-2 text-right font-medium">PEMB</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,7 +150,10 @@ export function TerritoryPanel() {
                           <span className="tabular font-medium">{st.demand}</span>
                         </div>
                       </td>
-                      <td className="py-2.5 text-right tabular">{st.pipeline}</td>
+                      <td className="py-2.5 pr-2 text-right tabular">{st.pipeline}</td>
+                      <td className="py-2.5 text-right tabular text-[var(--color-fg-muted)]">
+                        {(st.pembShare * 100).toFixed(0)}%
+                      </td>
                     </tr>
                   ))}
               </tbody>

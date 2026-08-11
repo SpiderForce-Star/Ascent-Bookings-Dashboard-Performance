@@ -1,5 +1,6 @@
 /**
  * Ascent Buildings market territory — Portland, TN plant + ~600-mile service area.
+ * Product focus: Pre-Engineered Metal Buildings (PEMB) / CSI Division 13.
  */
 
 export interface TerritoryState {
@@ -12,6 +13,11 @@ export interface TerritoryState {
   milesFromPlant: number;
   /** Sample pipeline weight for next 12 months (index) */
   pipeline: number;
+  /**
+   * Share of commercial opportunity that is PEMB / metal building systems (0–1).
+   * Planning estimate for product mix — not booked revenue split.
+   */
+  pembShare: number;
   notes: string;
 }
 
@@ -32,7 +38,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 96,
     milesFromPlant: 0,
     pipeline: 100,
-    notes: "Home plant market; highest density of fab + service work.",
+    pembShare: 0.78,
+    notes: "Home plant market; highest density of fab + service work. Strong PEMB / Div 13 mix.",
   },
   {
     code: "KY",
@@ -41,7 +48,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 88,
     milesFromPlant: 90,
     pipeline: 92,
-    notes: "Industrial corridors and agricultural buildings.",
+    pembShare: 0.76,
+    notes: "Industrial corridors and agricultural buildings — core PEMB product fit.",
   },
   {
     code: "AL",
@@ -50,7 +58,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 84,
     milesFromPlant: 180,
     pipeline: 86,
-    notes: "Auto/industrial suppliers and commercial shells.",
+    pembShare: 0.74,
+    notes: "Auto/industrial suppliers and commercial shells (PEMB-heavy).",
   },
   {
     code: "GA",
@@ -59,7 +68,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 90,
     milesFromPlant: 250,
     pipeline: 94,
-    notes: "Atlanta metro industrial + SE logistics.",
+    pembShare: 0.72,
+    notes: "Atlanta metro industrial + SE logistics PEMB packages.",
   },
   {
     code: "MS",
@@ -68,7 +78,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 72,
     milesFromPlant: 280,
     pipeline: 70,
-    notes: "Agricultural and light industrial.",
+    pembShare: 0.8,
+    notes: "Agricultural and light industrial metal buildings.",
   },
   {
     code: "AR",
@@ -77,7 +88,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 74,
     milesFromPlant: 320,
     pipeline: 76,
-    notes: "Westward expansion; poultry & manufacturing.",
+    pembShare: 0.77,
+    notes: "Westward expansion; poultry & manufacturing PEMB.",
   },
   {
     code: "MO",
@@ -86,7 +98,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 78,
     milesFromPlant: 340,
     pipeline: 80,
-    notes: "St. Louis / mid-MO commercial and industrial.",
+    pembShare: 0.73,
+    notes: "St. Louis / mid-MO commercial and industrial shells.",
   },
   {
     code: "IL",
@@ -95,7 +108,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 80,
     milesFromPlant: 360,
     pipeline: 82,
-    notes: "Southern IL + metro industrial parks.",
+    pembShare: 0.75,
+    notes: "Southern IL + industrial parks; strong self-storage PEMB.",
   },
   {
     code: "IN",
@@ -104,6 +118,7 @@ export const territoryStates: TerritoryState[] = [
     demand: 82,
     milesFromPlant: 300,
     pipeline: 85,
+    pembShare: 0.79,
     notes: "Manufacturing belt; strong metal building demand.",
   },
   {
@@ -113,7 +128,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 79,
     milesFromPlant: 380,
     pipeline: 81,
-    notes: "Industrial rehab and distribution.",
+    pembShare: 0.71,
+    notes: "Industrial rehab and distribution PEMB.",
   },
   {
     code: "WV",
@@ -122,7 +138,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 62,
     milesFromPlant: 420,
     pipeline: 58,
-    notes: "Select public and industrial projects.",
+    pembShare: 0.7,
+    notes: "Select public and industrial PEMB projects.",
   },
   {
     code: "PA",
@@ -131,7 +148,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 70,
     milesFromPlant: 520,
     pipeline: 68,
-    notes: "Western PA edge of radius; industrial focus.",
+    pembShare: 0.68,
+    notes: "Western PA edge of radius; industrial PEMB focus.",
   },
   {
     code: "VA",
@@ -140,7 +158,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 81,
     milesFromPlant: 450,
     pipeline: 83,
-    notes: "Data-center-adjacent and commercial growth.",
+    pembShare: 0.7,
+    notes: "Public/industrial growth; selective commercial PEMB.",
   },
   {
     code: "NC",
@@ -149,7 +168,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 87,
     milesFromPlant: 400,
     pipeline: 90,
-    notes: "Triangle / Charlotte industrial corridors.",
+    pembShare: 0.74,
+    notes: "Triangle / Charlotte industrial corridors — large PEMB packages.",
   },
   {
     code: "SC",
@@ -158,7 +178,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 83,
     milesFromPlant: 380,
     pipeline: 86,
-    notes: "Port-related and advanced manufacturing.",
+    pembShare: 0.76,
+    notes: "Port-related and advanced manufacturing metal buildings.",
   },
   {
     code: "FL",
@@ -167,7 +188,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 76,
     milesFromPlant: 550,
     pipeline: 74,
-    notes: "Panhandle & north FL commercial; selective.",
+    pembShare: 0.69,
+    notes: "Panhandle & north FL commercial PEMB; selective.",
   },
   {
     code: "TX",
@@ -176,7 +198,8 @@ export const territoryStates: TerritoryState[] = [
     demand: 85,
     milesFromPlant: 580,
     pipeline: 88,
-    notes: "East TX industrial / energy-adjacent buildings.",
+    pembShare: 0.73,
+    notes: "East TX industrial / energy-adjacent PEMB buildings.",
   },
 ];
 
@@ -189,12 +212,15 @@ export const regionLabels: Record<TerritoryState["region"], string> = {
 export function territoryTotals() {
   const avgDemand =
     territoryStates.reduce((s, t) => s + t.demand, 0) / territoryStates.length;
+  const avgPembShare =
+    territoryStates.reduce((s, t) => s + t.pembShare, 0) / territoryStates.length;
   const core = territoryStates.filter((t) => t.region === "core");
   const primary = territoryStates.filter((t) => t.region === "primary");
   const extended = territoryStates.filter((t) => t.region === "extended");
   return {
     stateCount: territoryStates.length,
     avgDemand,
+    avgPembShare,
     coreCount: core.length,
     primaryCount: primary.length,
     extendedCount: extended.length,

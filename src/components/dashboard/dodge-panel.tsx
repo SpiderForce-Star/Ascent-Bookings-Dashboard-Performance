@@ -4,9 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   BUILDING_LABEL,
+  PEMB_BUILDING_TYPES,
+  PRODUCT_LINE_LABEL,
   STAGE_LABEL,
+  isPembFocused,
   type DodgeProject,
   type DodgeProjectStage,
+  type ProductLine,
 } from "@/data/dodge";
 import { useDodgeProjects } from "@/hooks/use-dodge-projects";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -35,13 +39,22 @@ const STAGE_VARIANT: Record<
   unknown: "secondary",
 };
 
+type ProductFilter = "pemb" | "all" | ProductLine;
+
 export function DodgePanel() {
   const { data, loading, error, refresh } = useDodgeProjects(true);
   const [stageFilter, setStageFilter] = useState<string>("all");
+  /** Default toward industrial / warehouse / mfg / self-storage / ag PEMB work */
+  const [productFilter, setProductFilter] = useState<ProductFilter>("pemb");
   const [sort, setSort] = useState<"valuation" | "miles" | "bid">("valuation");
 
   const projects = useMemo(() => {
     let list = [...data.projects];
+    if (productFilter === "pemb") {
+      list = list.filter((p) => isPembFocused(p));
+    } else if (productFilter !== "all") {
+      list = list.filter((p) => p.productLine === productFilter);
+    }
     if (stageFilter !== "all") {
       list = list.filter((p) => p.stage === stageFilter);
     }
@@ -55,7 +68,18 @@ export function DodgePanel() {
       return b.valuation - a.valuation;
     });
     return list;
-  }, [data.projects, stageFilter, sort]);
+  }, [data.projects, stageFilter, productFilter, sort]);
+
+  const pembStats = useMemo(() => {
+    const pemb = data.projects.filter((p) => isPembFocused(p));
+    const val = pemb.reduce((s, p) => s + p.valuation, 0);
+    const total = data.projects.reduce((s, p) => s + p.valuation, 0);
+    return {
+      count: pemb.length,
+      valuation: val,
+      share: total > 0 ? val / total : 0,
+    };
+  }, [data.projects]);
 
   const isLive = data.status.mode === "live";
 
@@ -71,7 +95,9 @@ export function DodgePanel() {
             Project pipeline
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
-            Commercial construction projects in the Portland, TN ~600-mile footprint. Live mode uses the{" "}
+            CSI Division 13 Special Construction — pre-engineered metal building (PEMB) systems, structural
+            steel packages, and industrial / warehouse / ag / self-storage shells in the Portland, TN
+            ~600-mile footprint. Live mode uses the{" "}
             <a
               href="https://www.construction.com/apis/"
               target="_blank"
@@ -95,7 +121,6 @@ export function DodgePanel() {
         </div>
       </div>
 
-      {/* Connection status */}
       <Card className={cn(!data.status.configured && "border-dashed")}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
@@ -133,15 +158,48 @@ export function DodgePanel() {
         </p>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Projects" value={String(data.summary.projectCount)} />
-        <Stat label="Pipeline value" value={formatCurrency(data.summary.totalValuation, true)} />
-        <Stat label="Out for bid" value={String(data.summary.biddingCount)} accent />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Stat label="Projects (filtered)" value={String(projects.length)} />
+        <Stat
+          label="Pipeline value"
+          value={formatCurrency(
+            projects.reduce((s, p) => s + p.valuation, 0),
+            true,
+          )}
+        />
+        <Stat
+          label="Out for bid"
+          value={String(projects.filter((p) => p.stage === "bidding").length)}
+          accent
+        />
+        <Stat label="PEMB / Div 13 share" value={`${(pembStats.share * 100).toFixed(0)}%`} />
         <Stat label="Avg miles from plant" value={`${data.summary.avgMiles} mi`} />
       </div>
 
-      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Product</span>
+        {(
+          [
+            ["pemb", "PEMB focus"],
+            ["all", "All lines"],
+            ["PEMB", "PEMB only"],
+            ["Component", "Component"],
+            ["Other", "Other"],
+          ] as const
+        ).map(([id, label]) => (
+          <Button
+            key={id}
+            type="button"
+            size="sm"
+            variant={productFilter === id ? "default" : "secondary"}
+            className="h-8 rounded-full"
+            onClick={() => setProductFilter(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Stage</span>
         {["all", "bidding", "design", "planning", "preconstruction", "construction"].map((s) => (
@@ -177,7 +235,11 @@ export function DodgePanel() {
         ))}
       </div>
 
-      {/* Table */}
+      <p className="text-[11px] text-[var(--color-fg-muted)]">
+        Default <strong className="font-medium text-[var(--color-fg)]">PEMB focus</strong> includes{" "}
+        {PEMB_BUILDING_TYPES.map((t) => BUILDING_LABEL[t]).join(", ")} plus projects tagged PEMB / Div 13.
+      </p>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -185,17 +247,18 @@ export function DodgePanel() {
             Opportunities
           </CardTitle>
           <CardDescription>
-            {projects.length} projects · states in Ascent territory · min{" "}
+            {projects.length} projects · CSI Division 13 / commercial · min{" "}
             {formatCurrency(data.filters.minValuation, true)}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto pt-0">
-          <table className="w-full min-w-[800px] border-collapse text-sm">
+          <table className="w-full min-w-[880px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
                 <th className="pb-2 pr-3 font-medium">Project</th>
                 <th className="pb-2 pr-3 font-medium">Stage</th>
                 <th className="pb-2 pr-3 font-medium">Type</th>
+                <th className="pb-2 pr-3 font-medium">Product</th>
                 <th className="pb-2 pr-3 text-right font-medium">Value</th>
                 <th className="pb-2 pr-3 text-right font-medium">Miles</th>
                 <th className="pb-2 pr-3 font-medium">Bid date</th>
@@ -208,7 +271,7 @@ export function DodgePanel() {
               ))}
               {projects.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-sm text-[var(--color-fg-muted)]">
+                  <td colSpan={8} className="py-10 text-center text-sm text-[var(--color-fg-muted)]">
                     No projects match the current filters.
                   </td>
                 </tr>
@@ -218,7 +281,6 @@ export function DodgePanel() {
         </CardContent>
       </Card>
 
-      {/* Companies */}
       {data.companies.length > 0 && (
         <Card>
           <CardHeader>
@@ -275,6 +337,11 @@ function ProjectRow({ project: p }: { project: DodgeProject }) {
         <Badge variant={STAGE_VARIANT[p.stage]}>{STAGE_LABEL[p.stage]}</Badge>
       </td>
       <td className="py-3 pr-3 text-xs text-[var(--color-fg-muted)]">{BUILDING_LABEL[p.buildingType]}</td>
+      <td className="py-3 pr-3">
+        <Badge variant={p.productLine === "PEMB" ? "default" : "secondary"}>
+          {PRODUCT_LINE_LABEL[p.productLine]}
+        </Badge>
+      </td>
       <td className="py-3 pr-3 text-right tabular font-medium">{formatCurrency(p.valuation, true)}</td>
       <td className="py-3 pr-3 text-right tabular text-[var(--color-fg-muted)]">{p.milesFromPlant}</td>
       <td className="py-3 pr-3 text-xs tabular text-[var(--color-fg-muted)]">{p.bidDate ?? "—"}</td>

@@ -105,3 +105,52 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* State sales sheets — print / PDF handoff */
+@media print {
+  header,
+  nav,
+  footer,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .print\:space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .print\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .print\:border-0 {
+    border-width: 0 !important;
+  }
+
+  .print\:bg-transparent {
+    background: transparent !important;
+  }
+
+  .print\:px-0 {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .print\:mt-4 {
+    margin-top: 1rem !important;
+  }
+}

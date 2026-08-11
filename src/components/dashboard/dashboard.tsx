@@ -17,6 +17,8 @@ import { ForecastPanel } from "./forecast-panel";
 import { TerritoryPanel } from "./territory-panel";
 import { LiveFeedsPanel } from "./live-feeds-panel";
 import { DodgePanel } from "./dodge-panel";
+import { SalesSheetsPanel } from "./sales-sheets-panel";
+import { SteelForecastPanel } from "./steel-forecast-panel";
 import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import {
   FileSpreadsheet,
@@ -26,6 +28,8 @@ import {
   BarChart3,
   Radio,
   GanttChartSquare,
+  ClipboardList,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -33,14 +37,23 @@ import { Badge } from "@/components/ui/badge";
 const defaultPreset = PRESETS.find((p) => p.id === "ytd-2026")!;
 const defaultRange = defaultPreset.range!;
 
-type TabId = "performance" | "feeds" | "dodge" | "forecast" | "territory";
+type TabId =
+  | "performance"
+  | "feeds"
+  | "dodge"
+  | "forecast"
+  | "steel"
+  | "territory"
+  | "sales-sheets";
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
-  { id: "forecast", label: "Forecast", icon: LineChart },
+  { id: "forecast", label: "Sales forecast", icon: LineChart },
+  { id: "steel", label: "Steel cost", icon: Flame },
   { id: "territory", label: "Territory", icon: MapPin },
+  { id: "sales-sheets", label: "Sales sheets", icon: ClipboardList },
 ];
 
 export function Dashboard() {
@@ -77,7 +90,7 @@ export function Dashboard() {
                   Bookings performance
                 </p>
                 <p className="truncate text-xs text-[var(--color-fg-muted)]">
-                  Executive dashboard · Portland, TN plant
+                  Executive dashboard · Portland, TN · PEMB / Div 13
                 </p>
               </div>
             </div>
@@ -178,11 +191,15 @@ export function Dashboard() {
           {tab === "feeds" && <LiveFeedsPanel />}
           {tab === "dodge" && <DodgePanel />}
           {tab === "forecast" && <ForecastPanel />}
+          {tab === "steel" && <SteelForecastPanel />}
           {tab === "territory" && <TerritoryPanel />}
+          {tab === "sales-sheets" && <SalesSheetsPanel />}
 
-          <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between">
-            <p>Ascent Buildings LLC · Portland, TN · Bookings through June 2026</p>
-            <p>FRED + BLS feeds · Dodge API-ready · Forecast is a planning model</p>
+          <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between print:hidden">
+            <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through June 2026</p>
+            <p>
+              FRED + BLS · Dodge · Sales & steel cost forecasts · State sheets are planning models
+            </p>
           </footer>
         </main>
       </div>
