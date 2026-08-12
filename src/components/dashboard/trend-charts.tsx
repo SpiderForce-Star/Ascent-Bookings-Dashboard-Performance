@@ -79,8 +79,8 @@ export function TrendCharts({ data }: TrendChartsProps) {
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Revenue trend</CardTitle>
-          <CardDescription>Bookings vs prior-year same months</CardDescription>
+          <CardTitle>Sales trend</CardTitle>
+          <CardDescription>Selected period vs prior-year same months</CardDescription>
         </CardHeader>
         <CardContent className="h-72 pt-0 sm:h-80">
           <ResponsiveContainer width="100%" height="100%">

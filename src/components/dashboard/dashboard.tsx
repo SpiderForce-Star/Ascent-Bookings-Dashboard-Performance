@@ -107,10 +107,10 @@ export function Dashboard() {
               </Badge>
               <span
                 className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] xl:inline-flex"
-                title="Performance through July 2026 · live FRED/BLS feeds · Dodge tab is a demo process board"
+                title="Bookings through July 2026 · live FRED/BLS · territory opportunity board"
               >
                 <FileSpreadsheet className="size-3.5" />
-                YTD 2026 · Jul · FRED/BLS · Dodge-ready (demo)
+                YTD 2026 · Jul · FRED/BLS · Territory board
               </span>
             </div>
           </div>
@@ -159,8 +159,8 @@ export function Dashboard() {
                     {rangeLabel}
                   </h1>
                   <p className="mt-1 max-w-xl text-sm text-[var(--color-fg-muted)]">
-                    Booked revenue and margin through July 2026, live FRED/BLS market signals, and planning
-                    models for forecast, territory, and steel. Dodge pipeline is a demo process board.
+                    Booked revenue and margin through July 2026. Live FRED/BLS market pulse, territory
+                    focus, steel risk, and a pursuit board for the Portland, TN footprint.
                   </p>
                 </div>
                 <p className="text-xs text-[var(--color-fg-subtle)] tabular">
@@ -204,10 +204,10 @@ export function Dashboard() {
           <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-0.5">
               <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through July 2026</p>
-              <p className="print:hidden">Created by Chris Woodmore · Release 8-12-2026</p>
+              <p>Created by Chris Woodmore · Release 8-12-2026</p>
             </div>
             <p className="print:hidden">
-              FRED + BLS live · Dodge demo process board · Sales & steel forecasts are planning models
+              FRED + BLS live · Territory opportunity board · Sales & steel forecasts are planning models
             </p>
           </footer>
         </main>

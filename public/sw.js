@@ -10,7 +10,7 @@
  *
  * Bump CACHE_VERSION when you change precache list or strategy so clients refresh.
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const SHELL_CACHE = `ascent-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `ascent-runtime-${CACHE_VERSION}`;
 
@@ -60,6 +60,12 @@ self.addEventListener("activate", (event) => {
       await self.clients.claim();
     })(),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {

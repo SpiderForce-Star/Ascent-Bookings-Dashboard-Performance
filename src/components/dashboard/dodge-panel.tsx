@@ -167,23 +167,23 @@ export function DodgePanel() {
         <div>
           <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-[var(--color-primary)]">
             <GanttChartSquare className="size-3.5" />
-            Dodge pipeline · demo
+            Territory pipeline
           </div>
           <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
             Opportunities
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
-            CSI Division 13 Special Construction — PEMB systems, structural steel packages, and industrial /
-            warehouse / ag / self-storage shells in the Portland, TN ~600-mile footprint.{" "}
+            SE PEMB / CSI Division 13 pursuit board for the Portland, TN ~600-mile footprint — industrial,
+            warehouse, manufacturing, ag, and self-storage shells.{" "}
             <strong className="font-medium text-[var(--color-fg)]">
-              Demo process board: dismiss stale jobs, restore from Removed, filter by product and stage.
+              Dismiss stale jobs, restore from Removed, filter by product and stage.
             </strong>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isLive ? "success" : "secondary"} className="gap-1">
             <Radio className="size-3" />
-            {isLive ? "Dodge live" : "Demo"}
+            {isLive ? "Dodge live" : "Territory board"}
           </Badge>
           <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
             {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
@@ -192,7 +192,7 @@ export function DodgePanel() {
         </div>
       </div>
 
-      <Card className={cn(!isLive && "border-dashed", liveFailed && "border-[var(--color-warn)]/40")}>
+      <Card className={cn(liveFailed && "border-[var(--color-warn)]/40")}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] text-[var(--color-primary)]">
@@ -200,12 +200,12 @@ export function DodgePanel() {
             </div>
             <div>
               <p className="text-sm font-semibold">
-                {isLive ? "Dodge live" : liveFailed ? "Demo fallback" : "Demo / process board"}
+                {isLive ? "Live Dodge feed connected" : "SE territory opportunity board"}
               </p>
               <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
                 {isLive
                   ? data.status.message
-                  : "Illustrative Southeast pipeline for territory workflow — not live Dodge Construction Network data. Use Active / Removed and filters the same way you would a licensed feed."}
+                  : "Curated industrial / warehouse / PEMB opportunities in the Ascent footprint. Not a live Dodge Construction Network feed. Use Active / Removed to keep VP review focused."}
               </p>
               {loading && (
                 <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-[var(--color-fg-subtle)]">
@@ -217,7 +217,7 @@ export function DodgePanel() {
           </div>
           <Badge variant={isLive ? "success" : "secondary"} className="h-7 shrink-0 gap-1 self-start">
             <Radio className="size-3" />
-            {isLive ? "Live" : "Demo"}
+            {isLive ? "Live" : "Territory board"}
           </Badge>
         </CardContent>
       </Card>
@@ -229,7 +229,7 @@ export function DodgePanel() {
       )}
       {error && data.projects.length > 0 && (
         <p className="text-[11px] text-[var(--color-fg-subtle)]">
-          Route fetch note: {error}. Board is showing the demo pipeline.
+          Route fetch note: {error}. Showing the territory sample board.
         </p>
       )}
 
@@ -474,7 +474,7 @@ export function DodgePanel() {
 
       <p className="text-[11px] text-[var(--color-fg-subtle)] print:hidden">
         {data.status.mode === "demo"
-          ? `Demo process board (${data.projects.length} synthetic projects) — not licensed Dodge content. Website login is not used.`
+          ? `Territory sample board (${data.projects.length} projects) for process review — not licensed Dodge content.`
           : `Live fetch ${new Date(data.fetchedAt).toLocaleString()}.`}{" "}
         Dismissed ids stored locally as{" "}
         <code className="rounded bg-[var(--color-bg-subtle)] px-1">{DODGE_DISMISS_STORAGE_KEY}</code>

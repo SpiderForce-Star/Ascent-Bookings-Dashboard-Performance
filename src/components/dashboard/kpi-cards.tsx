@@ -28,62 +28,60 @@ function Delta({ value, invert = false }: { value: number; invert?: boolean }) {
 export function KpiCards({ metrics }: KpiCardsProps) {
   const cards = [
     {
-      id: "revenue",
-      label: "Total revenue",
+      id: "sales",
+      label: "Sales",
       value: formatCurrency(metrics.revenue, true),
       full: formatCurrency(metrics.revenue),
-      hint: `vs ${formatCurrency(metrics.priorRevenue, true)} prior period`,
+      hint: `${metrics.monthCount} mo · vs ${formatCurrency(metrics.priorRevenue, true)} prior year`,
       icon: DollarSign,
       accent: "bg-[var(--color-primary-soft)] text-[var(--color-primary)]",
       footer: <Delta value={metrics.growth} />,
-      footerLabel: "YoY growth",
+      footerLabel: "YoY",
     },
     {
-      id: "growth",
-      label: "Revenue growth",
+      id: "gm-dollars",
+      label: "Gross margin $",
+      value: formatCurrency(metrics.gm, true),
+      full: formatCurrency(metrics.gm),
+      hint: `Avg ${formatCurrency(metrics.avgMonthly, true)} sales / month`,
+      icon: DollarSign,
+      accent: "bg-[var(--color-info-soft)] text-[var(--color-info)]",
+      footer: (
+        <span className="text-xs text-[var(--color-fg-subtle)] tabular">
+          {(metrics.gmPct * 100).toFixed(1)}%
+        </span>
+      ),
+      footerLabel: "GM rate",
+    },
+    {
+      id: "gm-pct",
+      label: "Gross margin %",
+      value: `${(metrics.gmPct * 100).toFixed(1)}%`,
+      full: `${(metrics.gmPct * 100).toFixed(2)}% · ${formatCurrency(metrics.gm)} GM`,
+      hint: "Gross margin on bookings in range",
+      icon: Percent,
+      accent: "bg-[var(--color-success-soft)] text-[var(--color-success)]",
+      footer: (
+        <span className="text-xs text-[var(--color-fg-subtle)] tabular">{formatCurrency(metrics.gm, true)}</span>
+      ),
+      footerLabel: "GM dollars",
+    },
+    {
+      id: "yoy",
+      label: "YoY growth",
       value: formatPercent(metrics.growth),
-      full: `${formatPercent(metrics.growth, 2)} year-over-year`,
-      hint: metrics.priorRevenue > 0 ? "Compared to same months prior year" : "No prior-year baseline",
+      full: `${formatPercent(metrics.growth, 2)} year-over-year vs same months prior year`,
+      hint:
+        metrics.priorRevenue > 0
+          ? `Volume churn ${formatPercent(metrics.churn).replace("+", "")} on declining months`
+          : "No prior-year baseline",
       icon: metrics.growth >= 0 ? TrendingUp : TrendingDown,
       accent:
         metrics.growth >= 0
           ? "bg-[var(--color-success-soft)] text-[var(--color-success)]"
           : "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
-      footer: (
-        <span className="text-xs text-[var(--color-fg-subtle)] tabular">
-          Avg {formatCurrency(metrics.avgMonthly, true)}/mo
-        </span>
-      ),
-      footerLabel: "Monthly avg",
-    },
-    {
-      id: "churn",
-      label: "Volume churn",
-      value: formatPercent(metrics.churn).replace("+", ""),
-      full: `${(metrics.churn * 100).toFixed(1)}% of prior-year revenue not retained on declining months`,
-      hint: "Share of prior-year booking volume lost on YoY declines",
-      icon: TrendingDown,
-      accent:
-        metrics.churn <= 0.15
-          ? "bg-[var(--color-success-soft)] text-[var(--color-success)]"
-          : metrics.churn <= 0.3
-            ? "bg-[var(--color-warn-soft)] text-[var(--color-warn)]"
-            : "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
-      footer: <Delta value={-metrics.churn} invert />,
-      footerLabel: "Lower is better",
-    },
-    {
-      id: "gm",
-      label: "Gross margin",
-      value: `${(metrics.gmPct * 100).toFixed(1)}%`,
-      full: `${formatCurrency(metrics.gm)} GM · ${(metrics.gmPct * 100).toFixed(2)}%`,
-      hint: "Gross margin on bookings in range",
-      icon: Percent,
-      accent: "bg-[var(--color-info-soft)] text-[var(--color-info)]",
-      footer: (
-        <span className="text-xs text-[var(--color-fg-subtle)] tabular">{formatCurrency(metrics.gm, true)}</span>
-      ),
-      footerLabel: "GM dollars",
+      footer: <Delta value={metrics.growth} />,
+      footerLabel: "Same months LY",
     },
   ];
 

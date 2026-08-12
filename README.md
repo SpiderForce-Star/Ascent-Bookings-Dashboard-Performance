@@ -2,7 +2,7 @@
 
 **Corporate review build** for [Ascent Buildings LLC](https://github.com/SpiderForce-Star/Ascent-Bookings-Dashboard-Performance).
 
-Interactive executive dashboard for **bookings, margin, live construction market feeds, sales forecast, market territory, and state sales handoff sheets**, seeded with data from the **2nd Quarterly 2026 Bookings / Margin Report**.
+Interactive executive dashboard for **bookings, margin, live construction market feeds, sales forecast, market territory, and state sales handoff sheets**, seeded with actuals from the **July 2026 Bookings / Margin Report**.
 
 | | |
 | --- | --- |
