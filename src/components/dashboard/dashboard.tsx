@@ -107,7 +107,7 @@ export function Dashboard() {
               </Badge>
               <span className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] xl:inline-flex">
                 <FileSpreadsheet className="size-3.5" />
-                Q2 2026 · FRED/BLS · Dodge-ready
+                YTD 2026 · Jul · FRED/BLS · Dodge
               </span>
             </div>
           </div>
@@ -196,7 +196,7 @@ export function Dashboard() {
           {tab === "steel" && <SteelForecastPanel />}
 
           <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between print:hidden">
-            <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through June 2026</p>
+            <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through July 2026</p>
             <p>
               FRED + BLS · Dodge · Sales & steel cost forecasts · State sheets are planning models
             </p>

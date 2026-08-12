@@ -1,5 +1,7 @@
 /**
- * Ascent Buildings LLC — 2nd Quarterly 2026 Bookings / Margin Report data.
+ * Ascent Buildings LLC — Bookings / Margin Report data.
+ * Source of truth for monthly totals: Sales Graph + GM Graph.
+ * Actuals through July 2026 (July 2026 Bookings Report, report date ~2026-08-10).
  * Embedded offline so the dashboard works without network or Excel.
  */
 
@@ -100,13 +102,15 @@ export const monthlyRecords: MonthlyRecord[] = [
   { year: 2025, month: "October", monthIndex: 9, sales: 8947402.3, gm: 2261818.88, gmPct: 0.2528 },
   { year: 2025, month: "November", monthIndex: 10, sales: 8814768.76, gm: 2184405.03, gmPct: 0.2478 },
   { year: 2025, month: "December", monthIndex: 11, sales: 6595205.27, gm: 1594799.53, gmPct: 0.2418 },
-  // 2026 (through June — report period)
+  // 2026 (through July — Sales Graph / GM Graph; July 2026 Bookings Report ~2026-08-10)
   { year: 2026, month: "January", monthIndex: 0, sales: 7339581.19, gm: 1903606.97, gmPct: 0.2594 },
   { year: 2026, month: "February", monthIndex: 1, sales: 11338903.11, gm: 2944775.69, gmPct: 0.2597 },
   { year: 2026, month: "March", monthIndex: 2, sales: 10218505.75, gm: 2434321.2, gmPct: 0.2382 },
   { year: 2026, month: "April", monthIndex: 3, sales: 6725240.88, gm: 1638639.85, gmPct: 0.2437 },
   { year: 2026, month: "May", monthIndex: 4, sales: 9201568.71, gm: 2618951.2, gmPct: 0.2846 },
   { year: 2026, month: "June", monthIndex: 5, sales: 8237608.08, gm: 2101289.32, gmPct: 0.2551 },
+  // July 2026 Sales Graph / GM Graph
+  { year: 2026, month: "July", monthIndex: 6, sales: 9122553.54, gm: 2239252.21, gmPct: 0.2455 },
 ];
 
 export interface SegmentRow {
@@ -121,7 +125,10 @@ export interface SegmentRow {
   fabTons: number;
 }
 
-/** YTD 2026 (Jan–Jun) product / plant breakdown from workbook sheets. */
+/**
+ * Product / plant breakdown mix from 2026 H1 workbook sheets.
+ * Scaled to any 2026 date range (including YTD through July) via scaledSegments().
+ */
 export const segmentYtd2026: SegmentRow[] = [
   {
     id: "bldgs",
@@ -331,7 +338,11 @@ export const quarterSummaries: QuarterSummary[] = (() => {
   return out;
 })();
 
-/** 2026 H1 monthly detail (freight & eng excluded sell amounts from Total Booked sheet). */
+/**
+ * 2026 monthly fab detail (Total Booked-style weight/cost where available).
+ * Jan–Jun from H1 workbook; July GM/sell aligned to Sales Graph / GM Graph with
+ * weight/cost estimated from June unit economics (full SO import not embedded).
+ */
 export interface MonthlyDetail2026 {
   month: MonthKey;
   monthIndex: number;
@@ -411,9 +422,21 @@ export const detail2026: MonthlyDetail2026[] = [
     costPerLb: 1.9569,
     sellPerLb: 2.7009,
   },
+  {
+    // Graph totals: sales 9,122,553.54 / GM 2,239,252.21; weight/cost from June unit economics
+    month: "July",
+    monthIndex: 6,
+    weight: 3377000,
+    cost: 6189000,
+    gm: 2239252.21,
+    sell: 8428252.21,
+    gmPct: 0.2657,
+    costPerLb: 1.8327,
+    sellPerLb: 2.4957,
+  },
 ];
 
-/** Engineering & freight ancillary totals 2026 YTD. */
+/** Engineering & freight ancillary totals 2026 YTD (H1 workbook; not yet re-cut for July). */
 export const ancillary2026 = {
   engineering: 1052520.14,
   freight: 2047101.73,
@@ -422,11 +445,16 @@ export const ancillary2026 = {
   compGmFrt: 24639.05,
 };
 
+/** Latest actual month in monthlyRecords for 2026 (0-based). */
+export const LATEST_ACTUAL_2026_MONTH = 6; // July
+
 export type DatePreset =
   | "ytd-2026"
+  | "jul-2026"
   | "q2-2026"
   | "q1-2026"
   | "h1-2026"
+  | "q3-2026"
   | "full-2025"
   | "full-2024"
   | "full-2023"
@@ -442,8 +470,22 @@ export interface DateRange {
 }
 
 export const PRESETS: { id: DatePreset; label: string; range: DateRange | null }[] = [
-  { id: "ytd-2026", label: "YTD 2026", range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: 5 } },
+  {
+    id: "ytd-2026",
+    label: "YTD 2026",
+    range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
+  },
+  {
+    id: "jul-2026",
+    label: "July 2026",
+    range: { startYear: 2026, startMonth: 6, endYear: 2026, endMonth: 6 },
+  },
   { id: "q2-2026", label: "Q2 2026", range: { startYear: 2026, startMonth: 3, endYear: 2026, endMonth: 5 } },
+  {
+    id: "q3-2026",
+    label: "Q3 2026 (Jul)",
+    range: { startYear: 2026, startMonth: 6, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
+  },
   { id: "q1-2026", label: "Q1 2026", range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: 2 } },
   { id: "h1-2026", label: "H1 2026", range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: 5 } },
   { id: "full-2025", label: "FY 2025", range: { startYear: 2025, startMonth: 0, endYear: 2025, endMonth: 11 } },
@@ -452,9 +494,14 @@ export const PRESETS: { id: DatePreset; label: string; range: DateRange | null }
   {
     id: "trailing-12",
     label: "Trailing 12",
-    range: { startYear: 2025, startMonth: 6, endYear: 2026, endMonth: 5 },
+    // Aug 2025 – Jul 2026
+    range: { startYear: 2025, startMonth: 7, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
   },
-  { id: "all", label: "All data", range: { startYear: 2023, startMonth: 0, endYear: 2026, endMonth: 5 } },
+  {
+    id: "all",
+    label: "All data",
+    range: { startYear: 2023, startMonth: 0, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
+  },
   { id: "custom", label: "Custom", range: null },
 ];
 
@@ -549,16 +596,18 @@ export function chartSeries(range: DateRange) {
   });
 }
 
-/** Scale YTD segment mix to the selected range when it falls inside 2026 H1. */
+/**
+ * Scale H1 product-mix segments to the selected 2026 range revenue
+ * (works for YTD through July and single-month July).
+ */
 export function scaledSegments(metrics: DashboardMetrics): SegmentRow[] {
   const ytdSales = monthlyRecords
     .filter((r) => r.year === 2026 && r.sales > 0)
     .reduce((s, r) => s + r.sales, 0);
   const ratio = ytdSales > 0 && metrics.months.every((m) => m.year === 2026) ? metrics.revenue / ytdSales : 1;
 
-  // Only show segment table when selection is primarily 2026
+  // Only show segment table when selection includes 2026
   if (!metrics.months.some((m) => m.year === 2026)) {
-    // Fall back: synthesize segment-like rows from annual totals by month share
     return [];
   }
 

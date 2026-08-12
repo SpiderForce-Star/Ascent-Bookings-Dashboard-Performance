@@ -313,7 +313,7 @@ export function ForecastPanel() {
         <Metric
           label="2026 YTD actual"
           value={formatCurrency(forecast.ytdActual, true)}
-          sub={pembOnly ? "Jan–Jun · PEMB share applied" : "Jan–Jun booked"}
+          sub={pembOnly ? "Jan–Jul · PEMB share applied" : "Jan–Jul booked"}
         />
         <Metric
           label="H2 2026 forecast"
@@ -398,7 +398,7 @@ export function ForecastPanel() {
               <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
               <ReferenceLine
                 yAxisId="left"
-                x="Jun 2026"
+                x="Jul 2026"
                 stroke="var(--color-border-strong)"
                 strokeDasharray="4 4"
                 label={{

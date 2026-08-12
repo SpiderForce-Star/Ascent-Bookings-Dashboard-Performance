@@ -9,7 +9,7 @@ Interactive executive dashboard for **bookings, margin, live construction market
 | **Plant** | Portland, Tennessee |
 | **Service area** | ~600-mile radius — AR, MO, IL, IN, OH, WV, PA, VA, NC, SC, Upper FL, Southeast into East TX, plus core TN/KY/AL/GA/MS |
 | **Product focus** | Pre-Engineered Metal Buildings (**PEMB**) / **CSI Division 13** Special Construction — metal building systems, structural steel packages, industrial / warehouse / ag / self-storage shells |
-| **Data period** | Actuals 2023 – June 2026; forecast Jul 2026 – Dec 2027 |
+| **Data period** | Actuals 2023 – July 2026 (July Bookings Report); forecast Aug 2026 – Dec 2027 |
 | **Live feeds** | FRED (construction put-in-place, permits) + BLS (employment, industrial building PPI) |
 | **Stack** | React 19 · TypeScript · Vite · TanStack Start · Tailwind · Recharts |
 

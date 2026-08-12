@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiConstructionFeedsRouteImport } from './routes/api/construction-feeds'
+import { Route as ApiMarketNewsRouteImport } from './routes/api/market-news'
 import { Route as ApiDodgeProjectsRouteImport } from './routes/api/dodge/projects'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const ApiConstructionFeedsRoute = ApiConstructionFeedsRouteImport.update({
   path: '/api/construction-feeds',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMarketNewsRoute = ApiMarketNewsRouteImport.update({
+  id: '/api/market-news',
+  path: '/api/market-news',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDodgeProjectsRoute = ApiDodgeProjectsRouteImport.update({
   id: '/api/dodge/projects',
   path: '/api/dodge/projects',
@@ -32,30 +38,41 @@ const ApiDodgeProjectsRoute = ApiDodgeProjectsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/construction-feeds': typeof ApiConstructionFeedsRoute
+  '/api/market-news': typeof ApiMarketNewsRoute
   '/api/dodge/projects': typeof ApiDodgeProjectsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/construction-feeds': typeof ApiConstructionFeedsRoute
+  '/api/market-news': typeof ApiMarketNewsRoute
   '/api/dodge/projects': typeof ApiDodgeProjectsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/construction-feeds': typeof ApiConstructionFeedsRoute
+  '/api/market-news': typeof ApiMarketNewsRoute
   '/api/dodge/projects': typeof ApiDodgeProjectsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/construction-feeds' | '/api/dodge/projects'
+  fullPaths:
+    '/' | '/api/construction-feeds' | '/api/market-news' | '/api/dodge/projects'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/construction-feeds' | '/api/dodge/projects'
-  id: '__root__' | '/' | '/api/construction-feeds' | '/api/dodge/projects'
+  to:
+    '/' | '/api/construction-feeds' | '/api/market-news' | '/api/dodge/projects'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/construction-feeds'
+    | '/api/market-news'
+    | '/api/dodge/projects'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiConstructionFeedsRoute: typeof ApiConstructionFeedsRoute
+  ApiMarketNewsRoute: typeof ApiMarketNewsRoute
   ApiDodgeProjectsRoute: typeof ApiDodgeProjectsRoute
 }
 
@@ -75,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiConstructionFeedsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/market-news': {
+      id: '/api/market-news'
+      path: '/api/market-news'
+      fullPath: '/api/market-news'
+      preLoaderRoute: typeof ApiMarketNewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/dodge/projects': {
       id: '/api/dodge/projects'
       path: '/api/dodge/projects'
@@ -88,6 +112,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiConstructionFeedsRoute: ApiConstructionFeedsRoute,
+  ApiMarketNewsRoute: ApiMarketNewsRoute,
   ApiDodgeProjectsRoute: ApiDodgeProjectsRoute,
 }
 export const routeTree = rootRouteImport

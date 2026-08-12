@@ -257,11 +257,12 @@ export function buildForecast(
   let forecastMonthIdx = 0;
   for (const year of [2026, 2027]) {
     for (let mi = 0; mi < 12; mi++) {
-      if (year === 2026 && mi <= 5) continue;
+      // Actuals embedded through July 2026 (monthIndex 6)
+      if (year === 2026 && mi <= 6) continue;
       const seas = seasonality[mi];
       let mkt = MARKET_INDEX[`${year}-${mi}`] ?? 100;
-      if (liveComposite != null && year === 2026 && mi >= 6) {
-        const w = mi === 6 ? 0.7 : mi <= 8 ? 0.45 : 0.25;
+      if (liveComposite != null && year === 2026 && mi >= 7) {
+        const w = mi === 7 ? 0.7 : mi <= 9 ? 0.45 : 0.25;
         mkt = mkt * (1 - w) + liveComposite * w;
       } else if (liveComposite != null && year === 2027 && mi <= 2) {
         mkt = mkt * 0.85 + liveComposite * 0.15;
@@ -414,11 +415,11 @@ function computeNationalTotals(
 
   for (const year of [2026, 2027]) {
     for (let mi = 0; mi < 12; mi++) {
-      if (year === 2026 && mi <= 5) continue;
+      if (year === 2026 && mi <= 6) continue;
       const seas = seasonality[mi];
       let mkt = MARKET_INDEX[`${year}-${mi}`] ?? 100;
-      if (opts.liveCompositeIndex != null && year === 2026 && mi >= 6) {
-        const w = mi === 6 ? 0.7 : mi <= 8 ? 0.45 : 0.25;
+      if (opts.liveCompositeIndex != null && year === 2026 && mi >= 7) {
+        const w = mi === 7 ? 0.7 : mi <= 9 ? 0.45 : 0.25;
         mkt = mkt * (1 - w) + opts.liveCompositeIndex * w;
       } else if (opts.liveCompositeIndex != null && year === 2027 && mi <= 2) {
         mkt = mkt * 0.85 + opts.liveCompositeIndex * 0.15;
