@@ -207,6 +207,38 @@ DNS for `ascentbuildings.com` is on **GoDaddy**. Full walkthrough (Vercel + GoDa
 
 Leave apex/`www` alone so the marketing site at [ascentbuildings.com](https://ascentbuildings.com) is unchanged.
 
+## Progressive Web App (install)
+
+The dashboard is installable as a full-screen app with **Ascent Money Icon** branding.
+
+| Asset | Path |
+| --- | --- |
+| Manifest | `/manifest.webmanifest` |
+| Icons | `/icons/icon-192.png`, `icon-512.png`, `icon-512-maskable.png`, `apple-touch-icon.png`, `favicon-32.png` |
+| Favicon | `/favicon.ico` |
+| Brand master | `/ascent-money-icon.png` |
+| Service worker | `/sw.js` (minimal shell cache; APIs stay network-first) |
+
+**Theme:** `theme_color` `#c8102e` · `background_color` `#f4f2ef` · `display: standalone`
+
+### How to install (after deploy)
+
+| Platform | Steps |
+| --- | --- |
+| **iPhone (Safari)** | Open the site → **Share** → **Add to Home Screen** → Add |
+| **Android (Chrome)** | Menu (⋮) → **Install app** / **Add to Home screen** |
+| **Desktop Chrome / Edge** | Install icon in the address bar (or menu → **Install Ascent Dashboard…**) |
+
+The installed app shows the Ascent Money Icon and opens **full-screen** to the dashboard (`start_url: /`). Works on `*.vercel.app` and future `dashboard.ascentbuildings.com`.
+
+Regenerate icons from the source JPG:
+
+```bash
+# Source: Pictures/Ascent Money Icon.jpg → public/ascent-money-icon-source.jpg
+# Uses sharp + png-to-ico (devDependencies)
+node scripts/generate-pwa-icons.mjs
+```
+
 ## Quick start
 
 ```bash
