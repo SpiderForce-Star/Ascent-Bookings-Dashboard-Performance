@@ -963,6 +963,31 @@ export function getSheetByCode(code: string): StateSalesSheet | undefined {
   return stateSalesSheets.find((s) => s.code === code);
 }
 
+/** Safe blank sheet so a missing code cannot crash the Sales Sheets tab. */
+export function emptySalesSheet(code: string): StateSalesSheet {
+  return {
+    code,
+    salesperson: "",
+    marketNotes: "",
+    vpNotes: "",
+    quotaTarget: 0,
+    activeProjects: 0,
+    designBiddingValue: 0,
+    topBuildingTypes: [],
+    bidsDue30: 0,
+    bidsDue60: 0,
+    bidsDue90: 0,
+    pipelineDollars: 0,
+    pembShare: DEFAULT_PEMB_SHARE,
+    opportunities: [],
+    callList: [],
+  };
+}
+
+export function sheetForCode(code: string): StateSalesSheet {
+  return getSheetByCode(code) ?? emptySalesSheet(code);
+}
+
 export function territoryWeight(state: TerritoryState): number {
   return Math.max(state.demand, 1) * Math.max(state.pipeline, 1);
 }

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   PRODUCT_LINE_LABEL,
-  stateSalesSheets,
+  sheetForCode,
   type StateSalesSheet,
 } from "@/data/sales-sheets";
 import { regionLabels, type TerritoryState } from "@/data/territory";
@@ -40,24 +40,31 @@ export function SalesSheetsPanel() {
   const [overrides, setOverrides] = useState<Record<string, SheetOverrides>>({});
 
   const rows = useMemo(() => {
-    let list = territoryList.map((st) => {
-      const sheet = stateSalesSheets.find((s) => s.code === st.code)!;
-      const ov = overrides[st.code];
-      // Prefer territory-store assigned rep (shared with Territory tab); no demo names
-      const rep = st.assignedRep.trim() || ov?.salesperson?.trim() || sheet.salesperson || "";
-      return {
-        state: st,
-        sheet: {
-          ...sheet,
-          salesperson: rep,
-          // Prefer live territory notes/metrics for handoff alignment
-          marketNotes: st.notes || sheet.marketNotes,
-          pembShare: st.pembShare,
-          vpNotes: ov?.vpNotes ?? sheet.vpNotes,
-          quotaTarget: ov?.quotaTarget ?? sheet.quotaTarget,
-        } as StateSalesSheet,
-      };
-    });
+    const built: Array<{ state: ManagedTerritoryState; sheet: StateSalesSheet }> = [];
+    for (const st of territoryList) {
+      try {
+        const sheet = sheetForCode(st.code);
+        const ov = overrides[st.code];
+        const rep = (st.assignedRep ?? ov?.salesperson ?? sheet?.salesperson ?? "").toString().trim();
+        built.push({
+          state: st,
+          sheet: {
+            ...sheet,
+            salesperson: rep,
+            marketNotes: st.notes || sheet.marketNotes,
+            pembShare: Number.isFinite(st.pembShare) ? st.pembShare : sheet.pembShare,
+            vpNotes: ov?.vpNotes ?? sheet.vpNotes,
+            quotaTarget: ov?.quotaTarget ?? sheet.quotaTarget,
+            opportunities: Array.isArray(sheet.opportunities) ? sheet.opportunities : [],
+            callList: Array.isArray(sheet.callList) ? sheet.callList : [],
+            topBuildingTypes: Array.isArray(sheet.topBuildingTypes) ? sheet.topBuildingTypes : [],
+          },
+        });
+      } catch {
+        // One bad state must not white-screen the tab
+      }
+    }
+    let list = built;
     if (regionFilter !== "all") {
       list = list.filter((r) => r.state.region === regionFilter);
     }
@@ -78,9 +85,10 @@ export function SalesSheetsPanel() {
       updateState(code, { assignedRep: patch.salesperson });
     }
     setOverrides((prev) => {
+      const seed = sheetForCode(code);
       const base = prev[code] ?? {
-        vpNotes: stateSalesSheets.find((s) => s.code === code)!.vpNotes,
-        quotaTarget: stateSalesSheets.find((s) => s.code === code)!.quotaTarget,
+        vpNotes: seed.vpNotes,
+        quotaTarget: seed.quotaTarget,
       };
       const next = { ...base, ...patch };
       delete (next as { salesperson?: string }).salesperson;
@@ -111,28 +119,33 @@ export function SalesSheetsPanel() {
     ];
     const lines = [header.join(",")];
     // Full footprint (not UI filter) so export matches Territory CSV scope
-    const exportRows = territoryList.map((st) => {
-      const base = stateSalesSheets.find((s) => s.code === st.code)!;
-      const ov = overrides[st.code];
-      return {
-        state: st,
-        sheet: {
-          ...base,
-          salesperson: st.assignedRep.trim() || base.salesperson || "",
-          marketNotes: st.notes || base.marketNotes,
-          pembShare: st.pembShare,
-          vpNotes: ov?.vpNotes ?? base.vpNotes,
-          quotaTarget: ov?.quotaTarget ?? base.quotaTarget,
-        } as StateSalesSheet,
-      };
-    });
+    const exportRows: Array<{ state: ManagedTerritoryState; sheet: StateSalesSheet }> = [];
+    for (const st of territoryList) {
+      try {
+        const base = sheetForCode(st.code);
+        const ov = overrides[st.code];
+        exportRows.push({
+          state: st,
+          sheet: {
+            ...base,
+            salesperson: (st.assignedRep ?? ov?.salesperson ?? base.salesperson ?? "").toString().trim(),
+            marketNotes: st.notes || base.marketNotes,
+            pembShare: Number.isFinite(st.pembShare) ? st.pembShare : base.pembShare,
+            vpNotes: ov?.vpNotes ?? base.vpNotes,
+            quotaTarget: ov?.quotaTarget ?? base.quotaTarget,
+          },
+        });
+      } catch {
+        /* skip one bad state */
+      }
+    }
     for (const { state, sheet } of exportRows) {
       const cells = [
         state.name,
         state.code,
         state.region,
         String(state.milesFromPlant),
-        sheet.salesperson.trim(),
+        (sheet.salesperson ?? "").toString().trim(),
         String(state.demand),
         String(state.pipeline),
         String(sheet.pipelineDollars),
@@ -233,6 +246,12 @@ export function SalesSheetsPanel() {
         ))}
       </div>
 
+      {rows.length === 0 && (
+        <p className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-4 py-8 text-center text-sm text-[var(--color-fg-muted)]">
+          No state sheets available for this filter.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {rows.map(({ state, sheet }) => (
           <button
@@ -247,7 +266,7 @@ export function SalesSheetsPanel() {
                   {state.name}{" "}
                   <span className="text-sm font-medium text-[var(--color-fg-subtle)]">{state.code}</span>
                 </p>
-                {sheet.salesperson.trim() !== "" && (
+                {(sheet.salesperson ?? "").toString().trim() !== "" && (
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--color-fg-muted)]">
                     <User className="size-3" />
                     {sheet.salesperson}
@@ -378,7 +397,7 @@ function StateSheetDetail({
               Assigned salesperson
               <input
                 className="mt-1 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm print:border-0 print:bg-transparent print:px-0"
-                value={sheet.salesperson}
+                value={sheet.salesperson ?? ""}
                 placeholder="Assign rep…"
                 onChange={(e) => onPatch({ salesperson: e.target.value })}
               />
@@ -407,7 +426,7 @@ function StateSheetDetail({
             <p className="text-sm text-[var(--color-fg-muted)]">{sheet.marketNotes}</p>
             <div className="flex flex-wrap gap-2">
               <Badge variant="default">PEMB {(sheet.pembShare * 100).toFixed(0)}%</Badge>
-              {sheet.topBuildingTypes.map((t) => (
+              {(sheet.topBuildingTypes ?? []).map((t) => (
                 <Badge key={t} variant="secondary" className="capitalize">
                   {t}
                 </Badge>
@@ -440,7 +459,7 @@ function StateSheetDetail({
           <CardHeader>
             <CardTitle className="text-base">PEMB opportunities</CardTitle>
             <CardDescription>
-              Sample CSI Division 13 / metal building pipeline ({sheet.opportunities.length} projects) —
+              Sample CSI Division 13 / metal building pipeline ({(sheet.opportunities ?? []).length} projects) —
               illustrative
             </CardDescription>
           </CardHeader>
@@ -456,7 +475,7 @@ function StateSheetDetail({
                 </tr>
               </thead>
               <tbody>
-                {sheet.opportunities.map((o) => (
+                {(sheet.opportunities ?? []).map((o) => (
                   <tr
                     key={o.id}
                     className="border-b border-[var(--color-border)]/70 align-top"
@@ -498,7 +517,7 @@ function StateSheetDetail({
             <CardDescription>Architect / GC / developer placeholders</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 pt-0">
-            {sheet.callList.map((c, i) => (
+            {(sheet.callList ?? []).map((c, i) => (
               <div
                 key={`${c.firm}-${i}`}
                 className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2.5"
@@ -510,7 +529,7 @@ function StateSheetDetail({
                 <p className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">{c.city}</p>
               </div>
             ))}
-            {sheet.callList.length === 0 && (
+            {(sheet.callList ?? []).length === 0 && (
               <p className="text-sm text-[var(--color-fg-muted)]">No contacts seeded for this state.</p>
             )}
           </CardContent>

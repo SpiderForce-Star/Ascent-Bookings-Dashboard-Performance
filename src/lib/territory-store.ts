@@ -124,15 +124,18 @@ function mergeState(seed: TerritoryState, ov?: TerritoryOverride): ManagedTerrit
     pipeline: ov?.pipeline ?? seed.pipeline,
     pembShare: ov?.pembShare ?? seed.pembShare,
     notes: ov?.notes ?? seed.notes,
-    assignedRep: ov?.assignedRep ?? "",
+    assignedRep: String(ov?.assignedRep ?? ""),
     isOverridden: hasOv,
   };
 }
 
 let overrides: TerritoryOverridesMap = loadOverrides();
 const listeners = new Set<Listener>();
+/** Cached for useSyncExternalStore — a new object every getSnapshot() loops React 19. */
+let snapshotCache: TerritorySnapshot = computeTerritorySnapshot();
 
 function emit() {
+  snapshotCache = computeTerritorySnapshot();
   for (const l of listeners) l();
 }
 
@@ -150,7 +153,7 @@ export function getTerritoryState(code: string): ManagedTerritoryState | undefin
   return mergeState(seed, overrides[code]);
 }
 
-export function getTerritorySnapshot(): TerritorySnapshot {
+function computeTerritorySnapshot(): TerritorySnapshot {
   const states = getTerritoryStates();
   const core = states.filter((t) => t.region === "core");
   const primary = states.filter((t) => t.region === "primary");
@@ -175,6 +178,10 @@ export function getTerritorySnapshot(): TerritorySnapshot {
       overriddenCount: states.filter((s) => s.isOverridden).length,
     },
   };
+}
+
+export function getTerritorySnapshot(): TerritorySnapshot {
+  return snapshotCache;
 }
 
 export function updateTerritoryState(code: string, partial: TerritoryOverride): void {
