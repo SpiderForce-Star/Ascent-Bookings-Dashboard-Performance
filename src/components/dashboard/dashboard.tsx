@@ -42,18 +42,18 @@ type TabId =
   | "feeds"
   | "dodge"
   | "forecast"
-  | "steel"
   | "territory"
-  | "sales-sheets";
+  | "sales-sheets"
+  | "steel";
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
   { id: "forecast", label: "Sales forecast", icon: LineChart },
-  { id: "steel", label: "Steel cost", icon: Flame },
   { id: "territory", label: "Territory", icon: MapPin },
   { id: "sales-sheets", label: "Sales sheets", icon: ClipboardList },
+  { id: "steel", label: "Steel cost", icon: Flame },
 ];
 
 export function Dashboard() {
@@ -191,9 +191,9 @@ export function Dashboard() {
           {tab === "feeds" && <LiveFeedsPanel />}
           {tab === "dodge" && <DodgePanel />}
           {tab === "forecast" && <ForecastPanel />}
-          {tab === "steel" && <SteelForecastPanel />}
           {tab === "territory" && <TerritoryPanel />}
           {tab === "sales-sheets" && <SalesSheetsPanel />}
+          {tab === "steel" && <SteelForecastPanel />}
 
           <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between print:hidden">
             <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through June 2026</p>
