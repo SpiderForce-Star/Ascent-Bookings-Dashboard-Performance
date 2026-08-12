@@ -13,9 +13,11 @@ import {
   type ProductLine,
 } from "@/data/dodge";
 import { useDodgeProjects } from "@/hooks/use-dodge-projects";
+import { useDodgeDismissed } from "@/lib/dodge-dismiss-store";
 import { MarketNewsSection } from "@/components/dashboard/market-news-section";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
+  ArchiveRestore,
   Building2,
   ExternalLink,
   KeyRound,
@@ -23,6 +25,8 @@ import {
   MapPin,
   Radio,
   RefreshCw,
+  RotateCcw,
+  Trash2,
   GanttChartSquare,
 } from "lucide-react";
 
@@ -41,16 +45,31 @@ const STAGE_VARIANT: Record<
 };
 
 type ProductFilter = "pemb" | "all" | ProductLine;
+type BoardTab = "active" | "removed";
 
 export function DodgePanel() {
   const { data, loading, error, refresh } = useDodgeProjects(true);
+  const { dismissedIds, dismiss, restore, restoreAll, isDismissed } = useDodgeDismissed();
   const [stageFilter, setStageFilter] = useState<string>("all");
   /** Default toward industrial / warehouse / mfg / self-storage / ag PEMB work */
   const [productFilter, setProductFilter] = useState<ProductFilter>("pemb");
   const [sort, setSort] = useState<"valuation" | "miles" | "bid">("valuation");
+  const [boardTab, setBoardTab] = useState<BoardTab>("active");
+
+  const activeSource = useMemo(
+    () => data.projects.filter((p) => !isDismissed(p.id)),
+    [data.projects, dismissedIds, isDismissed],
+  );
+
+  const removedSource = useMemo(
+    () => data.projects.filter((p) => isDismissed(p.id)),
+    [data.projects, dismissedIds, isDismissed],
+  );
+
+  const boardSource = boardTab === "active" ? activeSource : removedSource;
 
   const projects = useMemo(() => {
-    let list = [...data.projects];
+    let list = [...boardSource];
     if (productFilter === "pemb") {
       list = list.filter((p) => isPembFocused(p));
     } else if (productFilter !== "all") {
@@ -69,20 +88,51 @@ export function DodgePanel() {
       return b.valuation - a.valuation;
     });
     return list;
-  }, [data.projects, stageFilter, productFilter, sort]);
+  }, [boardSource, stageFilter, productFilter, sort]);
 
-  const pembStats = useMemo(() => {
-    const pemb = data.projects.filter((p) => isPembFocused(p));
-    const val = pemb.reduce((s, p) => s + p.valuation, 0);
-    const total = data.projects.reduce((s, p) => s + p.valuation, 0);
+  /** KPIs always reflect Active board only (honest VP summary). */
+  const activeKpis = useMemo(() => {
+    const pemb = activeSource.filter((p) => isPembFocused(p));
+    const pembVal = pemb.reduce((s, p) => s + p.valuation, 0);
+    const totalVal = activeSource.reduce((s, p) => s + p.valuation, 0);
+    const bidding = activeSource.filter((p) => p.stage === "bidding").length;
+    const avgMiles =
+      activeSource.length > 0
+        ? Math.round(
+            activeSource.reduce((s, p) => s + p.milesFromPlant, 0) / activeSource.length,
+          )
+        : 0;
     return {
-      count: pemb.length,
-      valuation: val,
-      share: total > 0 ? val / total : 0,
+      count: activeSource.length,
+      totalValuation: totalVal,
+      biddingCount: bidding,
+      pembShare: totalVal > 0 ? pembVal / totalVal : 0,
+      avgMiles,
+      filteredCount: boardTab === "active" ? projects.length : projects.length,
+      filteredValue:
+        boardTab === "active"
+          ? projects.reduce((s, p) => s + p.valuation, 0)
+          : projects.reduce((s, p) => s + p.valuation, 0),
+      filteredBidding:
+        boardTab === "active"
+          ? projects.filter((p) => p.stage === "bidding").length
+          : projects.filter((p) => p.stage === "bidding").length,
     };
-  }, [data.projects]);
+  }, [activeSource, boardTab, projects]);
 
   const isLive = data.status.mode === "live";
+  const removedCount = removedSource.length;
+  const activeCount = activeSource.length;
+
+  function handleDismiss(id: string, title: string) {
+    if (
+      window.confirm(
+        `Remove “${title}” from the active board?\n\nIt will move to Removed and can be restored anytime. The project is not deleted from Dodge/demo data.`,
+      )
+    ) {
+      dismiss(id);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -98,16 +148,11 @@ export function DodgePanel() {
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
             CSI Division 13 Special Construction — pre-engineered metal building (PEMB) systems, structural
             steel packages, and industrial / warehouse / ag / self-storage shells in the Portland, TN
-            ~600-mile footprint. Live mode uses the{" "}
-            <a
-              href="https://www.construction.com/apis/"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
-            >
-              Dodge REST API
-            </a>{" "}
-            (OAuth 2.0). Without credentials, a realistic demo pipeline is shown for exec review.
+            ~600-mile footprint.{" "}
+            <strong className="font-medium text-[var(--color-fg)]">
+              Dismiss jobs that have gone stale on Dodge so the active board stays actionable. Restore
+              anytime from the Removed tab.
+            </strong>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -159,23 +204,20 @@ export function DodgePanel() {
         </p>
       )}
 
+      {/* Active-only KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat label="Projects (filtered)" value={String(projects.length)} />
-        <Stat
-          label="Pipeline value"
-          value={formatCurrency(
-            projects.reduce((s, p) => s + p.valuation, 0),
-            true,
-          )}
-        />
-        <Stat
-          label="Out for bid"
-          value={String(projects.filter((p) => p.stage === "bidding").length)}
-          accent
-        />
-        <Stat label="PEMB / Div 13 share" value={`${(pembStats.share * 100).toFixed(0)}%`} />
-        <Stat label="Avg miles from plant" value={`${data.summary.avgMiles} mi`} />
+        <Stat label="Active projects" value={String(activeKpis.count)} />
+        <Stat label="Active pipeline $" value={formatCurrency(activeKpis.totalValuation, true)} />
+        <Stat label="Out for bid (active)" value={String(activeKpis.biddingCount)} accent />
+        <Stat label="PEMB / Div 13 share" value={`${(activeKpis.pembShare * 100).toFixed(0)}%`} />
+        <Stat label="Avg miles (active)" value={`${activeKpis.avgMiles} mi`} />
       </div>
+      {removedCount > 0 && (
+        <p className="text-[11px] text-[var(--color-fg-subtle)]">
+          {removedCount} job{removedCount === 1 ? "" : "s"} hidden on <strong className="font-medium">Removed</strong>{" "}
+          — KPIs above reflect Active only.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Product</span>
@@ -242,18 +284,62 @@ export function DodgePanel() {
       </p>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="size-4" />
-            Opportunities
-          </CardTitle>
-          <CardDescription>
-            {projects.length} projects · CSI Division 13 / commercial · min{" "}
-            {formatCurrency(data.filters.minValuation, true)}
-          </CardDescription>
+        <CardHeader className="pb-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="size-4" />
+                Opportunities
+              </CardTitle>
+              <CardDescription>
+                {boardTab === "active"
+                  ? `${projects.length} shown · Active board · min ${formatCurrency(data.filters.minValuation, true)}`
+                  : `${projects.length} shown · Removed board · restore anytime`}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={boardTab === "active" ? "default" : "ghost"}
+                  className="h-8 rounded-full px-3"
+                  onClick={() => setBoardTab("active")}
+                >
+                  Active ({activeCount})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={boardTab === "removed" ? "default" : "ghost"}
+                  className="h-8 rounded-full px-3"
+                  onClick={() => setBoardTab("removed")}
+                >
+                  Removed ({removedCount})
+                </Button>
+              </div>
+              {boardTab === "removed" && removedCount > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 gap-1.5"
+                  onClick={() => {
+                    if (window.confirm(`Restore all ${removedCount} removed jobs to Active?`)) {
+                      restoreAll();
+                      setBoardTab("active");
+                    }
+                  }}
+                >
+                  <RotateCcw className="size-3.5" />
+                  Restore all
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto pt-0">
-          <table className="w-full min-w-[880px] border-collapse text-sm">
+          <table className="w-full min-w-[940px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
                 <th className="pb-2 pr-3 font-medium">Project</th>
@@ -263,17 +349,33 @@ export function DodgePanel() {
                 <th className="pb-2 pr-3 text-right font-medium">Value</th>
                 <th className="pb-2 pr-3 text-right font-medium">Miles</th>
                 <th className="pb-2 pr-3 font-medium">Bid date</th>
-                <th className="pb-2 font-medium">Owner / GC</th>
+                <th className="pb-2 pr-3 font-medium">Owner / GC</th>
+                <th className="pb-2 font-medium text-right">Board</th>
               </tr>
             </thead>
             <tbody>
               {projects.map((p) => (
-                <ProjectRow key={p.id} project={p} />
+                <ProjectRow
+                  key={p.id}
+                  project={p}
+                  mode={boardTab}
+                  muted={boardTab === "removed"}
+                  onDismiss={() => handleDismiss(p.id, p.title)}
+                  onRestore={() => restore(p.id)}
+                />
               ))}
               {projects.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-[var(--color-fg-muted)]">
-                    No projects match the current filters.
+                  <td colSpan={9} className="py-10 text-center text-sm text-[var(--color-fg-muted)]">
+                    {boardTab === "removed" ? (
+                      <>
+                        No removed jobs. Dismiss stale opportunities from{" "}
+                        <strong className="font-medium text-[var(--color-fg)]">Active</strong> to keep the
+                        board clean.
+                      </>
+                    ) : (
+                      "No projects match the current filters on the Active board."
+                    )}
                   </td>
                 </tr>
               )}
@@ -306,7 +408,6 @@ export function DodgePanel() {
         </Card>
       )}
 
-      {/* Market intelligence — construction / industrial investment news (excluded from print) */}
       <div className="border-t border-[var(--color-border)] pt-6">
         <MarketNewsSection />
       </div>
@@ -314,17 +415,34 @@ export function DodgePanel() {
       <p className="text-[11px] text-[var(--color-fg-subtle)] print:hidden">
         Dodge Construction Network API · REST + OAuth 2.0 · Projects, companies/contacts, and documents.{" "}
         {data.status.mode === "demo"
-          ? "Demo data is synthetic for product review — not licensed Dodge content."
-          : `Live fetch ${new Date(data.fetchedAt).toLocaleString()}.`}
+          ? `Demo data is synthetic (${data.projects.length} projects) — not licensed Dodge content.`
+          : `Live fetch ${new Date(data.fetchedAt).toLocaleString()}.`}{" "}
+        Dismissed ids stored locally as{" "}
+        <code className="rounded bg-[var(--color-bg-subtle)] px-1">ascent-dodge-dismissed-v1</code>.
       </p>
     </div>
   );
 }
 
-function ProjectRow({ project: p }: { project: DodgeProject }) {
+function ProjectRow({
+  project: p,
+  mode,
+  muted,
+  onDismiss,
+  onRestore,
+}: {
+  project: DodgeProject;
+  mode: BoardTab;
+  muted?: boolean;
+  onDismiss: () => void;
+  onRestore: () => void;
+}) {
   return (
     <tr
-      className="border-b border-[var(--color-border)]/70 align-top transition-colors hover:bg-[var(--color-bg-subtle)]/50"
+      className={cn(
+        "border-b border-[var(--color-border)]/70 align-top transition-colors hover:bg-[var(--color-bg-subtle)]/50",
+        muted && "opacity-75",
+      )}
       title={p.notes}
     >
       <td className="py-3 pr-3">
@@ -351,9 +469,36 @@ function ProjectRow({ project: p }: { project: DodgeProject }) {
       <td className="py-3 pr-3 text-right tabular font-medium">{formatCurrency(p.valuation, true)}</td>
       <td className="py-3 pr-3 text-right tabular text-[var(--color-fg-muted)]">{p.milesFromPlant}</td>
       <td className="py-3 pr-3 text-xs tabular text-[var(--color-fg-muted)]">{p.bidDate ?? "—"}</td>
-      <td className="py-3 text-xs text-[var(--color-fg-muted)]">
+      <td className="py-3 pr-3 text-xs text-[var(--color-fg-muted)]">
         <p>{p.owner ?? "—"}</p>
         {p.gc && <p className="text-[var(--color-fg-subtle)]">GC: {p.gc}</p>}
+      </td>
+      <td className="py-3 text-right">
+        {mode === "active" ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-8 gap-1 text-xs"
+            title="Remove from active board"
+            onClick={onDismiss}
+          >
+            <Trash2 className="size-3.5" />
+            <span className="hidden sm:inline">Remove</span>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-8 gap-1 text-xs"
+            title="Restore to active board"
+            onClick={onRestore}
+          >
+            <ArchiveRestore className="size-3.5" />
+            <span className="hidden sm:inline">Restore</span>
+          </Button>
+        )}
       </td>
     </tr>
   );
