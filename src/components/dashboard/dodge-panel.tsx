@@ -398,18 +398,17 @@ export function DodgePanel() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto pt-0">
-          <table className="w-full min-w-[940px] border-collapse text-sm">
+          <table className="w-full border-collapse text-sm md:min-w-[720px]">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
                 <th className="pb-2 pr-3 font-medium">Project</th>
                 <th className="pb-2 pr-3 font-medium">Stage</th>
-                <th className="pb-2 pr-3 font-medium">Type</th>
-                <th className="pb-2 pr-3 font-medium">Product</th>
+                <th className="hidden pb-2 pr-3 font-medium md:table-cell">Type</th>
+                <th className="hidden pb-2 pr-3 font-medium md:table-cell">Product</th>
                 <th className="pb-2 pr-3 text-right font-medium">Value</th>
-                <th className="pb-2 pr-3 text-right font-medium">Miles</th>
-                <th className="pb-2 pr-3 font-medium">Bid date</th>
-                <th className="pb-2 pr-3 font-medium">Owner / GC</th>
-                <th className="pb-2 font-medium text-right">Board</th>
+                <th className="hidden pb-2 pr-3 text-right font-medium md:table-cell">Miles</th>
+                <th className="hidden pb-2 pr-3 font-medium md:table-cell">Bid date</th>
+                <th className="hidden pb-2 pr-3 font-medium md:table-cell">Owner / GC</th>
               </tr>
             </thead>
             <tbody>
@@ -425,7 +424,7 @@ export function DodgePanel() {
               ))}
               {emptyKind && (
                 <tr>
-                  <td colSpan={9} className="py-10">
+                  <td colSpan={8} className="py-10">
                     <EmptyBoard
                       kind={emptyKind}
                       onClearFilters={clearFilters}
@@ -593,47 +592,51 @@ function ProjectRow({
         )}
       </td>
       <td className="py-3 pr-3">
-        <Badge variant={STAGE_VARIANT[p.stage]}>{STAGE_LABEL[p.stage]}</Badge>
+        <div className="flex flex-col items-start gap-2">
+          <Badge variant={STAGE_VARIANT[p.stage]}>{STAGE_LABEL[p.stage]}</Badge>
+          {mode === "active" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="!h-11 !min-h-11 gap-1.5 px-3 text-xs sm:!h-9 sm:!min-h-9"
+              title="Remove from active board"
+              onClick={onDismiss}
+            >
+              <Trash2 className="size-3.5" />
+              Remove
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              className="!h-11 !min-h-11 gap-1.5 px-3 text-xs sm:!h-9 sm:!min-h-9"
+              title="Restore to active board"
+              onClick={onRestore}
+            >
+              <ArchiveRestore className="size-3.5" />
+              Restore
+            </Button>
+          )}
+        </div>
       </td>
-      <td className="py-3 pr-3 text-xs text-[var(--color-fg-muted)]">{BUILDING_LABEL[p.buildingType]}</td>
-      <td className="py-3 pr-3">
+      <td className="hidden py-3 pr-3 text-xs text-[var(--color-fg-muted)] md:table-cell">
+        {BUILDING_LABEL[p.buildingType]}
+      </td>
+      <td className="hidden py-3 pr-3 md:table-cell">
         <Badge variant={p.productLine === "PEMB" ? "default" : "secondary"}>
           {PRODUCT_LINE_LABEL[p.productLine]}
         </Badge>
       </td>
       <td className="py-3 pr-3 text-right tabular font-medium">{formatCurrency(p.valuation, true)}</td>
-      <td className="py-3 pr-3 text-right tabular text-[var(--color-fg-muted)]">{p.milesFromPlant}</td>
-      <td className="py-3 pr-3 text-xs tabular text-[var(--color-fg-muted)]">{p.bidDate ?? "—"}</td>
-      <td className="py-3 pr-3 text-xs text-[var(--color-fg-muted)]">
+      <td className="hidden py-3 pr-3 text-right tabular text-[var(--color-fg-muted)] md:table-cell">
+        {p.milesFromPlant}
+      </td>
+      <td className="hidden py-3 pr-3 text-xs tabular text-[var(--color-fg-muted)] md:table-cell">
+        {p.bidDate ?? "—"}
+      </td>
+      <td className="hidden py-3 pr-3 text-xs text-[var(--color-fg-muted)] md:table-cell">
         <p>{p.owner ?? "—"}</p>
         {p.gc && <p className="text-[var(--color-fg-subtle)]">GC: {p.gc}</p>}
-      </td>
-      <td className="py-3 text-right">
-        {mode === "active" ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-8 gap-1 text-xs"
-            title="Remove from active board"
-            onClick={onDismiss}
-          >
-            <Trash2 className="size-3.5" />
-            <span className="hidden sm:inline">Remove</span>
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-8 gap-1 text-xs"
-            title="Restore to active board"
-            onClick={onRestore}
-          >
-            <ArchiveRestore className="size-3.5" />
-            <span className="hidden sm:inline">Restore</span>
-          </Button>
-        )}
       </td>
     </tr>
   );
