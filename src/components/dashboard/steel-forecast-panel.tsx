@@ -58,6 +58,7 @@ import {
   Factory,
   FileSpreadsheet,
   Flame,
+  Loader2,
   Radio,
   RefreshCw,
   RotateCcw,
@@ -97,6 +98,47 @@ const VIEWS: { id: SteelView; label: string }[] = [
   { id: "export", label: "Export" },
 ];
 
+type PathPoint = {
+  month: string;
+  base: number;
+  adjusted: number;
+  mom: number;
+  adjMom: number;
+  uplift: number;
+  geo: number;
+};
+
+function categoryPath(rows: SteelAdjustedRow[], cat: string): PathPoint[] {
+  return rows
+    .filter((r) => r.Category === cat)
+    .sort((a, b) => a.Date.localeCompare(b.Date))
+    .map((r) => ({
+      month: r.Month,
+      base: r.Base_Price_per_Ton,
+      adjusted: r.Adjusted_Price_per_Ton,
+      mom: r.MoM_Pct,
+      adjMom: r.Adj_MoM_Pct,
+      uplift: r.Risk_Uplift_Pct,
+      geo: r.GeoRiskPremium_Pct,
+    }));
+}
+
+const EXEC_ALERT_CATS = ["Overall", "TNFAB", "TNFAB2nd"];
+
+function sortExecAlerts(alerts: SteelPriceAlert[]): SteelPriceAlert[] {
+  return [...alerts].sort((a, b) => {
+    const rank = { critical: 0, watch: 1, info: 2 };
+    const sr = rank[a.severity] - rank[b.severity];
+    if (sr !== 0) return sr;
+    const pa = EXEC_ALERT_CATS.indexOf(a.category);
+    const pb = EXEC_ALERT_CATS.indexOf(b.category);
+    const ia = pa === -1 ? 50 : pa;
+    const ib = pb === -1 ? 50 : pb;
+    if (ia !== ib) return ia - ib;
+    return a.category.localeCompare(b.category);
+  });
+}
+
 function ChartTip({
   active,
   payload,
@@ -107,19 +149,39 @@ function ChartTip({
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
+  const base = payload.find((e) => e.dataKey === "base");
+  const adj = payload.find((e) => e.dataKey === "adjusted");
+  const upliftRow = payload.find((e) => e.dataKey === "uplift");
+  const uplift =
+    upliftRow != null
+      ? Number(upliftRow.value)
+      : base && adj && Number(base.value) > 0
+        ? ((Number(adj.value) - Number(base.value)) / Number(base.value)) * 100
+        : null;
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 shadow-[var(--shadow-md)]">
       <p className="mb-1 text-xs font-medium">{label}</p>
-      {payload.map((e) => (
-        <div key={e.dataKey} className="flex justify-between gap-6 text-xs">
-          <span className="text-[var(--color-fg-muted)]">{e.name}</span>
+      {payload
+        .filter((e) => e.dataKey !== "uplift")
+        .map((e) => (
+          <div key={e.dataKey} className="flex justify-between gap-6 text-xs">
+            <span className="text-[var(--color-fg-muted)]">{e.name}</span>
+            <span className="tabular font-medium">
+              {e.dataKey.toLowerCase().includes("mom")
+                ? `${Number(e.value).toFixed(2)}%`
+                : formatCurrency(Number(e.value))}
+            </span>
+          </div>
+        ))}
+      {uplift != null && Number.isFinite(uplift) && (
+        <div className="mt-1 flex justify-between gap-6 border-t border-[var(--color-border)] pt-1 text-xs">
+          <span className="text-[var(--color-fg-muted)]">Uplift</span>
           <span className="tabular font-medium">
-            {e.dataKey.toLowerCase().includes("mom") || e.dataKey.toLowerCase().includes("uplift")
-              ? `${Number(e.value).toFixed(2)}%`
-              : formatCurrency(Number(e.value))}
+            {uplift >= 0 ? "+" : ""}
+            {uplift.toFixed(2)}%
           </span>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -128,10 +190,10 @@ export function SteelForecastPanel() {
   const [baseRows, setBaseRows] = useState<SteelBaseRow[]>(SAMPLE_STEEL_ROWS);
   const [modelSource, setModelSource] = useState("Sample (5-1-2026 pattern)");
   const [draftRisks, setDraftRisks] = useState<RiskFactors>(() => cloneRisks(BASELINE));
-  const [appliedRisks, setAppliedRisks] = useState<RiskFactors>(() => cloneRisks(BASELINE));
   const [category, setCategory] = useState("Overall");
   const [view, setView] = useState<SteelView>("overview");
-  const [liveBias, setLiveBias] = useState(false);
+  const [liveBias, setLiveBias] = useState(true);
+  const [tnfabSeriesId, setTnfabSeriesId] = useState<"TNFAB" | "TNFAB2nd">("TNFAB");
   const [passThrough, setPassThrough] = useState(0.72);
   const [tonsPerJob, setTonsPerJob] = useState(85);
   const [alertThresholds, setAlertThresholds] = useState<SteelAlertThresholds>(loadAlertThresholds);
@@ -140,17 +202,12 @@ export function SteelForecastPanel() {
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
   );
   const notifiedIds = useRef<Set<string>>(new Set());
-  const { data: feeds } = useConstructionFeeds(true);
+  const { data: feeds, loading: feedsLoading, refresh: refreshFeeds } = useConstructionFeeds(true);
 
+  const biasOn = liveBias && feeds.live && Number.isFinite(feeds.signal.compositeIndex);
   const effectiveRisks = useMemo(
-    () => applyLiveFeedBias(appliedRisks, feeds.signal.compositeIndex, liveBias),
-    [appliedRisks, feeds.signal.compositeIndex, liveBias],
-  );
-
-  /** Draft risks (live bias) — alerts recompute as sliders move, before Apply */
-  const draftEffectiveRisks = useMemo(
-    () => applyLiveFeedBias(draftRisks, feeds.signal.compositeIndex, liveBias),
-    [draftRisks, feeds.signal.compositeIndex, liveBias],
+    () => applyLiveFeedBias(draftRisks, feeds.signal.compositeIndex, biasOn),
+    [draftRisks, feeds.signal.compositeIndex, biasOn],
   );
 
   const adjusted = useMemo(
@@ -158,14 +215,10 @@ export function SteelForecastPanel() {
     [baseRows, effectiveRisks],
   );
 
-  const alertPath = useMemo(
-    () => regenerateForecast(baseRows, draftEffectiveRisks, true),
-    [baseRows, draftEffectiveRisks],
-  );
-
   const cats = useMemo(() => availableCategories(baseRows), [baseRows]);
-  const metrics = useMemo(() => summaryMetrics(adjusted, category), [adjusted, category]);
   const overallMetrics = useMemo(() => summaryMetrics(adjusted, "Overall"), [adjusted]);
+  const tnfabMetrics = useMemo(() => summaryMetrics(adjusted, tnfabSeriesId), [adjusted, tnfabSeriesId]);
+  const tnfabPrimaryMetrics = useMemo(() => summaryMetrics(adjusted, "TNFAB"), [adjusted]);
   const hottest = useMemo(() => maxRiskCategory(adjusted), [adjusted]);
   const stateSheets = useMemo(() => buildSteelStateSheets(adjusted), [adjusted]);
 
@@ -177,22 +230,15 @@ export function SteelForecastPanel() {
     });
   }, [overallMetrics, passThrough, tonsPerJob]);
 
-  const alertPembImpact = useMemo(() => {
-    const om = summaryMetrics(alertPath, "Overall");
-    if (!om) return null;
-    return pembCostImpact(om.avg_price, om.avg_adj, {
-      passThroughPct: passThrough,
-      tonsPerProject: tonsPerJob,
-    });
-  }, [alertPath, passThrough, tonsPerJob]);
-
   const priceAlerts = useMemo(
     () =>
-      evaluateSteelAlerts(alertPath, draftEffectiveRisks, {
-        thresholds: alertThresholds,
-        pembImpact: alertPembImpact,
-      }),
-    [alertPath, draftEffectiveRisks, alertThresholds, alertPembImpact],
+      sortExecAlerts(
+        evaluateSteelAlerts(adjusted, effectiveRisks, {
+          thresholds: alertThresholds,
+          pembImpact,
+        }),
+      ),
+    [adjusted, effectiveRisks, alertThresholds, pembImpact],
   );
 
   /** Categories with base-vs-adjusted alerts (for category chips) */
@@ -243,22 +289,9 @@ export function SteelForecastPanel() {
     setNotifPermission(p);
   }
 
-  const catSeries = useMemo(
-    () =>
-      adjusted
-        .filter((r) => r.Category === category)
-        .sort((a, b) => a.Date.localeCompare(b.Date))
-        .map((r) => ({
-          month: r.Month,
-          base: r.Base_Price_per_Ton,
-          adjusted: r.Adjusted_Price_per_Ton,
-          mom: r.MoM_Pct,
-          adjMom: r.Adj_MoM_Pct,
-          uplift: r.Risk_Uplift_Pct,
-          geo: r.GeoRiskPremium_Pct,
-        })),
-    [adjusted, category],
-  );
+  const catSeries = useMemo(() => categoryPath(adjusted, category), [adjusted, category]);
+  const overallSeries = useMemo(() => categoryPath(adjusted, "Overall"), [adjusted]);
+  const tnfabSeries = useMemo(() => categoryPath(adjusted, tnfabSeriesId), [adjusted, tnfabSeriesId]);
 
   const multiCatCompare = useMemo(() => {
     const months = [...new Set(adjusted.map((r) => r.Month))].sort();
@@ -294,11 +327,8 @@ export function SteelForecastPanel() {
     [baseRows, category, effectiveRisks],
   );
 
-  const applyRisks = () => setAppliedRisks(cloneRisks(draftRisks));
   const restoreBaseline = () => {
-    const b = cloneRisks(BASELINE);
-    setDraftRisks(b);
-    setAppliedRisks(b);
+    setDraftRisks(cloneRisks(BASELINE));
   };
 
   const onUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
@@ -337,12 +367,6 @@ export function SteelForecastPanel() {
     }
   }, []);
 
-  const riskDirty =
-    draftRisks.tariff_change_pct !== appliedRisks.tariff_change_pct ||
-    draftRisks.china_dumping_risk_pct !== appliedRisks.china_dumping_risk_pct ||
-    draftRisks.geo_risk_premium_pct !== appliedRisks.geo_risk_premium_pct ||
-    draftRisks.social_demand_vol_pct !== appliedRisks.social_demand_vol_pct;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -352,21 +376,35 @@ export function SteelForecastPanel() {
             Steel cost forecast
           </div>
           <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
-            US steel $/ton — 24-month Base vs Risk-Adjusted
+            Overall + TNFAB — 2-year path
           </h2>
           <div className="mt-1 flex max-w-2xl flex-wrap items-center gap-2 text-sm text-[var(--color-fg-muted)]">
             <span>
-              PEMB / CSI Division 13 material categories (plates, beams, sub-framing, sheet/trim, HSS, TNFAB).
-              Offline sample + pure TypeScript risk engine ported from Ascent steel forecast.
+              24-month Base vs Risk-Adjusted $/ton for plant and board review. PEMB / CSI Division 13 mix
+              (plates, beams, HSS, TNFAB). Offline sample always loads; construction-feed bias when live.
             </span>
             <Badge variant="secondary">{PEMB_DIV13_TAG}</Badge>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={feeds.live ? "success" : "outline"} className="gap-1">
+          <Badge variant={biasOn ? "success" : "outline"} className="gap-1" title={feeds.signal.narrative}>
             <Radio className="size-3" />
-            Feeds {feeds.live ? "live" : "cached"}
+            {biasOn
+              ? `Live market bias · ${feeds.signal.compositeIndex.toFixed(0)}`
+              : feeds.live
+                ? "Feeds live · bias off"
+                : "Using baseline sample forecast"}
           </Badge>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={feedsLoading}
+            onClick={() => void refreshFeeds()}
+          >
+            {feedsLoading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            Refresh
+          </Button>
           <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 text-xs font-medium hover:bg-[var(--color-bg-subtle)]">
             <Upload className="size-3.5" />
             Upload Excel
@@ -389,41 +427,49 @@ export function SteelForecastPanel() {
 
       <p className="text-[11px] text-[var(--color-fg-subtle)]">
         Source: <span className="font-medium text-[var(--color-fg-muted)]">{modelSource}</span>
-        {liveBias && (
+        {biasOn ? (
           <>
             {" "}
-            · Live feed bias on geo / demand vol (composite {feeds.signal.compositeIndex.toFixed(1)})
+            · Live FRED/BLS bias on geo / demand vol (composite {feeds.signal.compositeIndex.toFixed(1)}
+            {feeds.signal.materialsPressure != null
+              ? ` · materials MoM ${feeds.signal.materialsPressure >= 0 ? "+" : ""}${feeds.signal.materialsPressure.toFixed(2)}%`
+              : ""}
+            ). Not mill spot prices.
           </>
+        ) : (
+          <> · Using baseline sample forecast — page stays populated offline.</>
         )}
       </p>
 
       {/* Controls */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Category & risk controls</CardTitle>
+          <CardTitle className="text-base">Risk controls</CardTitle>
           <CardDescription>
-            Adjust tariff, dumping, geo premium, and demand volatility — then Apply. Alert badges mark
-            categories with ≥{(ALERT_THRESHOLD * 100).toFixed(0)}% Base vs Adjusted gap.
+            Sliders update the 24-month Adjusted path and ±{(ALERT_THRESHOLD * 100).toFixed(0)}% / ±
+            6% alerts immediately. Watch ≥3% Base vs Adjusted; critical ≥6%.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-0">
-          <div className="flex flex-wrap gap-1.5">
-            {cats.map((c) => (
-              <Button
-                key={c}
-                type="button"
-                size="sm"
-                variant={category === c ? "default" : "secondary"}
-                className="h-8 rounded-full text-xs"
-                onClick={() => setCategory(c)}
-              >
-                {c}
-                {alertCats.includes(c) && (
-                  <AlertTriangle className="ml-1 size-3 text-[var(--color-warn)]" />
-                )}
-              </Button>
-            ))}
-          </div>
+          {view !== "overview" && (
+            <div className="flex flex-wrap gap-1.5">
+              {cats.map((c) => (
+                <Button
+                  key={c}
+                  type="button"
+                  size="sm"
+                  variant={category === c ? "default" : "secondary"}
+                  className="h-8 rounded-full text-xs"
+                  onClick={() => setCategory(c)}
+                >
+                  {c}
+                  {alertCats.includes(c) && (
+                    <AlertTriangle className="ml-1 size-3 text-[var(--color-warn)]" />
+                  )}
+                </Button>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <RiskSlider
@@ -461,9 +507,6 @@ export function SteelForecastPanel() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" onClick={applyRisks} disabled={!riskDirty}>
-              Apply risk case
-            </Button>
             <Button type="button" size="sm" variant="secondary" onClick={restoreBaseline}>
               <RotateCcw className="size-3.5" />
               Restore baseline
@@ -471,11 +514,8 @@ export function SteelForecastPanel() {
             <ToggleChip
               active={liveBias}
               onClick={() => setLiveBias((v) => !v)}
-              label="Live FRED/BLS bias"
+              label={biasOn ? "Live market bias on" : "Live market bias"}
             />
-            {riskDirty && (
-              <span className="text-xs text-[var(--color-warn)]">Unapplied slider changes</span>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -515,13 +555,17 @@ export function SteelForecastPanel() {
 
       {view === "overview" && (
         <OverviewView
-          metrics={metrics}
           overallMetrics={overallMetrics}
+          tnfabMetrics={tnfabMetrics}
+          tnfabPrimaryMetrics={tnfabPrimaryMetrics}
           hottest={hottest}
-          catSeries={catSeries}
+          overallSeries={overallSeries}
+          tnfabSeries={tnfabSeries}
+          tnfabSeriesId={tnfabSeriesId}
+          onTnfabSeriesId={setTnfabSeriesId}
+          hasTnfab2nd={cats.includes("TNFAB2nd")}
           multiCatCompare={multiCatCompare}
           pembImpact={pembImpact}
-          category={category}
           passThrough={passThrough}
           tonsPerJob={tonsPerJob}
           onPassThrough={setPassThrough}
@@ -653,6 +697,140 @@ function MetricCard({
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">{label}</p>
         <p className="mt-2 font-display text-2xl font-semibold tracking-tight tabular">{value}</p>
         {sub && <p className="mt-1 text-xs text-[var(--color-fg-muted)]">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PathSummaryCard({
+  title,
+  metrics,
+  flagged,
+  severity,
+}: {
+  title: string;
+  metrics: ReturnType<typeof summaryMetrics>;
+  flagged?: boolean;
+  severity?: SteelPriceAlert["severity"];
+}) {
+  return (
+    <Card
+      className={cn(
+        flagged && severity === "critical" && "border-[var(--color-danger)]/35",
+        flagged && severity === "watch" && "border-[var(--color-warn)]/40",
+      )}
+    >
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between gap-2 text-base">
+          <span>{title} · 24-month review</span>
+          {flagged && (
+            <Badge variant={severity === "critical" ? "danger" : "warn"}>
+              {severity === "critical" ? "≥6%" : "≥3%"}
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>Base end vs adjusted end · avg uplift · adj range</CardDescription>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-3 pt-0 sm:grid-cols-4">
+        <div>
+          <p className="text-[11px] text-[var(--color-fg-subtle)]">Base end</p>
+          <p className="font-display text-lg font-semibold tabular">
+            {metrics ? formatCurrency(metrics.end_price) : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-[var(--color-fg-subtle)]">Adjusted end</p>
+          <p className="font-display text-lg font-semibold tabular">
+            {metrics ? formatCurrency(metrics.end_adj) : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-[var(--color-fg-subtle)]">Avg uplift</p>
+          <p className="font-display text-lg font-semibold tabular">
+            {metrics
+              ? `${metrics.avg_uplift >= 0 ? "+" : ""}${metrics.avg_uplift.toFixed(2)}%`
+              : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-[var(--color-fg-subtle)]">Adj min / max</p>
+          <p className="font-display text-lg font-semibold tabular">
+            {metrics ? `${formatCurrency(metrics.min_adj)}–${formatCurrency(metrics.max_adj)}` : "—"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PathChart({
+  title,
+  description,
+  data,
+  fillId,
+}: {
+  title: string;
+  description: string;
+  data: PathPoint[];
+  fillId: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="h-64 pt-0 sm:h-80">
+        {data.length === 0 ? (
+          <p className="flex h-full items-center justify-center text-sm text-[var(--color-fg-muted)]">
+            No path for this category in the sample.
+          </p>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#c8102e" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#c8102e" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 10, fill: "var(--color-fg-subtle)" }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "var(--color-fg-subtle)" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `$${v}`}
+                width={52}
+                domain={["auto", "auto"]}
+              />
+              <Tooltip content={<ChartTip />} />
+              <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
+              <Line
+                type="monotone"
+                dataKey="base"
+                name="Base $/ton"
+                stroke="var(--color-chart-2)"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="adjusted"
+                name="Risk-adjusted $/ton"
+                stroke="#c8102e"
+                strokeWidth={2.5}
+                fill={`url(#${fillId})`}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
@@ -877,38 +1055,44 @@ function formatAlertThreshold(a: SteelPriceAlert): string {
 }
 
 function OverviewView({
-  metrics,
   overallMetrics,
+  tnfabMetrics,
+  tnfabPrimaryMetrics,
   hottest,
-  catSeries,
+  overallSeries,
+  tnfabSeries,
+  tnfabSeriesId,
+  onTnfabSeriesId,
+  hasTnfab2nd,
   multiCatCompare,
   pembImpact,
-  category,
   passThrough,
   tonsPerJob,
   onPassThrough,
   onTons,
   priceAlerts,
 }: {
-  metrics: ReturnType<typeof summaryMetrics>;
   overallMetrics: ReturnType<typeof summaryMetrics>;
+  tnfabMetrics: ReturnType<typeof summaryMetrics>;
+  tnfabPrimaryMetrics: ReturnType<typeof summaryMetrics>;
   hottest: { category: string; uplift: number };
-  catSeries: Array<{
-    month: string;
-    base: number;
-    adjusted: number;
-    mom: number;
-    adjMom: number;
-  }>;
+  overallSeries: PathPoint[];
+  tnfabSeries: PathPoint[];
+  tnfabSeriesId: "TNFAB" | "TNFAB2nd";
+  onTnfabSeriesId: (id: "TNFAB" | "TNFAB2nd") => void;
+  hasTnfab2nd: boolean;
   multiCatCompare: Array<{ category: string; full: string; base: number; adjusted: number }>;
   pembImpact: ReturnType<typeof pembCostImpact> | null;
-  category: string;
   passThrough: number;
   tonsPerJob: number;
   onPassThrough: (v: number) => void;
   onTons: (v: number) => void;
   priceAlerts: SteelPriceAlert[];
 }) {
+  const watchStrip = priceAlerts.filter((a) => a.metric === "base_vs_adjusted").slice(0, 8);
+  const overallBreach = priceAlerts.find((a) => a.category === "Overall" && a.metric === "base_vs_adjusted");
+  const tnfabBreach = priceAlerts.find((a) => a.category === "TNFAB" && a.metric === "base_vs_adjusted");
+
   return (
     <div className="space-y-4">
       {priceAlerts.length > 0 && (
@@ -925,27 +1109,94 @@ function OverviewView({
           </ul>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+
+      {watchStrip.length > 0 && (
+        <div className="flex flex-wrap gap-2 print:hidden">
+          {watchStrip.map((a) => (
+            <span
+              key={a.id}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]",
+                a.severity === "critical"
+                  ? "border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)] text-[var(--color-danger)]"
+                  : "border-[var(--color-warn)]/30 bg-[var(--color-warn-soft)] text-[var(--color-warn)]",
+                (a.category === "Overall" || a.category === "TNFAB") && "font-semibold",
+              )}
+              title={a.message}
+            >
+              <AlertTriangle className="size-3" />
+              {a.category} {a.value >= 0 ? "+" : ""}
+              {(a.value * 100).toFixed(1)}%
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <MetricCard
-          label={`${category} current base`}
-          value={metrics ? formatCurrency(metrics.start_price) : "—"}
-          sub={metrics ? `End base ${formatCurrency(metrics.end_price)}` : undefined}
+          label="Overall start → end (base)"
+          value={overallMetrics ? formatCurrency(overallMetrics.end_price) : "—"}
+          sub={
+            overallMetrics
+              ? `${formatCurrency(overallMetrics.start_price)} start · avg ${formatCurrency(overallMetrics.avg_price)}`
+              : undefined
+          }
         />
         <MetricCard
-          label="24-mo avg risk uplift"
-          value={metrics ? `${metrics.avg_uplift >= 0 ? "+" : ""}${metrics.avg_uplift.toFixed(2)}%` : "—"}
-          sub={metrics ? `Adj avg ${formatCurrency(metrics.avg_adj)}/ton` : undefined}
+          label="Overall adj $/ton"
+          value={overallMetrics ? formatCurrency(overallMetrics.end_adj) : "—"}
+          sub={
+            overallMetrics
+              ? `Avg ${formatCurrency(overallMetrics.avg_adj)} · ${overallMetrics.horizon_uplift_pct >= 0 ? "+" : ""}${overallMetrics.horizon_uplift_pct.toFixed(1)}% vs start`
+              : undefined
+          }
           accent
         />
         <MetricCard
-          label="Max risk category"
-          value={hottest.category}
-          sub={`${hottest.uplift >= 0 ? "+" : ""}${hottest.uplift.toFixed(2)}% avg uplift`}
+          label="TNFAB start → end (base)"
+          value={tnfabPrimaryMetrics ? formatCurrency(tnfabPrimaryMetrics.end_price) : "—"}
+          sub={
+            tnfabPrimaryMetrics
+              ? `${formatCurrency(tnfabPrimaryMetrics.start_price)} start · avg ${formatCurrency(tnfabPrimaryMetrics.avg_price)}`
+              : undefined
+          }
         />
         <MetricCard
-          label="Geo premium (avg)"
-          value={metrics ? `${metrics.avg_geo.toFixed(1)}%` : "—"}
-          sub="Embedded base path geo band 8–11%"
+          label="TNFAB adj $/ton"
+          value={tnfabPrimaryMetrics ? formatCurrency(tnfabPrimaryMetrics.end_adj) : "—"}
+          sub={
+            tnfabPrimaryMetrics
+              ? `Avg ${formatCurrency(tnfabPrimaryMetrics.avg_adj)} · ${tnfabPrimaryMetrics.avg_uplift >= 0 ? "+" : ""}${tnfabPrimaryMetrics.avg_uplift.toFixed(2)}% uplift`
+              : undefined
+          }
+        />
+        <MetricCard
+          label="Horizon uplift"
+          value={
+            overallMetrics
+              ? `${overallMetrics.horizon_uplift_pct >= 0 ? "+" : ""}${overallMetrics.horizon_uplift_pct.toFixed(1)}%`
+              : "—"
+          }
+          sub={
+            hottest.category
+              ? `Hottest: ${hottest.category} ${hottest.uplift >= 0 ? "+" : ""}${hottest.uplift.toFixed(2)}%`
+              : undefined
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <PathSummaryCard
+          title="Overall"
+          metrics={overallMetrics}
+          flagged={Boolean(overallBreach)}
+          severity={overallBreach?.severity}
+        />
+        <PathSummaryCard
+          title={tnfabSeriesId}
+          metrics={tnfabMetrics}
+          flagged={Boolean(tnfabBreach) && tnfabSeriesId === "TNFAB"}
+          severity={tnfabBreach?.severity}
         />
       </div>
 
@@ -1015,98 +1266,72 @@ function OverviewView({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="text-base">Base vs Risk-Adjusted — {category}</CardTitle>
-            <CardDescription>$/ton path over 24 months</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 pt-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={catSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="steelAdjFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 10, fill: "var(--color-fg-subtle)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "var(--color-fg-subtle)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `$${v}`}
-                  width={52}
-                  domain={["auto", "auto"]}
-                />
-                <Tooltip content={<ChartTip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
-                <Line
-                  type="monotone"
-                  dataKey="base"
-                  name="Base $/ton"
-                  stroke="var(--color-chart-2)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="adjusted"
-                  name="Risk-adjusted $/ton"
-                  stroke="var(--color-primary)"
-                  strokeWidth={2.5}
-                  fill="url(#steelAdjFill)"
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">MoM % — {category}</CardTitle>
-            <CardDescription>Base MoM (bars) vs adjusted MoM</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 pt-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={catSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 9, fill: "var(--color-fg-subtle)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "var(--color-fg-subtle)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                  width={40}
-                />
-                <Tooltip content={<ChartTip />} />
-                <Bar dataKey="mom" name="Base MoM %" fill="var(--color-chart-3)" radius={[2, 2, 0, 0]} />
-                <Line
-                  type="monotone"
-                  dataKey="adjMom"
-                  name="Adj MoM %"
-                  stroke="var(--color-primary)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <PathChart title="Overall — 2-year path" description="Base vs risk-adjusted $/ton · 24 months" data={overallSeries} fillId="steelAdjFillOverall" />
+        <div className="space-y-2">
+          {hasTnfab2nd && (
+            <div className="flex justify-end gap-1.5 print:hidden">
+              {(["TNFAB", "TNFAB2nd"] as const).map((id) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="sm"
+                  variant={tnfabSeriesId === id ? "default" : "secondary"}
+                  className="h-8 rounded-full text-xs"
+                  onClick={() => onTnfabSeriesId(id)}
+                >
+                  {id}
+                </Button>
+              ))}
+            </div>
+          )}
+          <PathChart
+            title={`${tnfabSeriesId} — 2-year path`}
+            description="Same 24-month horizon · PEMB fab mix"
+            data={tnfabSeries}
+            fillId="steelAdjFillTnfab"
+          />
+        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Overall MoM %</CardTitle>
+          <CardDescription>Base month-over-month (bars) vs adjusted MoM</CardDescription>
+        </CardHeader>
+        <CardContent className="h-56 pt-0 sm:h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={overallSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 9, fill: "var(--color-fg-subtle)" }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "var(--color-fg-subtle)" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${v}%`}
+                width={40}
+              />
+              <Tooltip content={<ChartTip />} />
+              <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
+              <Bar dataKey="mom" name="Base MoM %" fill="var(--color-chart-3)" radius={[2, 2, 0, 0]} />
+              <Line
+                type="monotone"
+                dataKey="adjMom"
+                name="Adj MoM %"
+                stroke="var(--color-primary)"
+                strokeWidth={2}
+                dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

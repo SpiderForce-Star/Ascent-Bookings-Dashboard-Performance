@@ -232,10 +232,14 @@ export interface SteelSummaryMetrics {
   start_adj: number;
   end_adj: number;
   avg_adj: number;
+  min_adj: number;
+  max_adj: number;
   n_months: number;
   avg_mom: number;
   avg_geo: number;
   avg_uplift: number;
+  /** (end adj / start base) − 1, in percent points */
+  horizon_uplift_pct: number;
 }
 
 export interface PembCostImpact {
@@ -535,19 +539,24 @@ export function summaryMetrics(rows: SteelAdjustedRow[], category: string): Stee
   if (sub.length === 0) return null;
   const prices = sub.map((r) => r.Base_Price_per_Ton);
   const adj = sub.map((r) => r.Adjusted_Price_per_Ton);
+  const startBase = prices[0]!;
+  const endAdj = adj[adj.length - 1]!;
   return {
-    start_price: prices[0]!,
+    start_price: startBase,
     end_price: prices[prices.length - 1]!,
     avg_price: prices.reduce((s, p) => s + p, 0) / prices.length,
     min_price: Math.min(...prices),
     max_price: Math.max(...prices),
     start_adj: adj[0]!,
-    end_adj: adj[adj.length - 1]!,
+    end_adj: endAdj,
     avg_adj: adj.reduce((s, p) => s + p, 0) / adj.length,
+    min_adj: Math.min(...adj),
+    max_adj: Math.max(...adj),
     n_months: sub.length,
     avg_mom: sub.reduce((s, r) => s + r.MoM_Pct, 0) / sub.length,
     avg_geo: sub.reduce((s, r) => s + r.GeoRiskPremium_Pct, 0) / sub.length,
     avg_uplift: sub.reduce((s, r) => s + r.Risk_Uplift_Pct, 0) / sub.length,
+    horizon_uplift_pct: startBase > 0 ? (endAdj / startBase - 1) * 100 : 0,
   };
 }
 
