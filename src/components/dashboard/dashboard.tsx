@@ -19,6 +19,7 @@ import { LiveFeedsPanel } from "./live-feeds-panel";
 import { DodgePanel } from "./dodge-panel";
 import { SalesSheetsPanel } from "./sales-sheets-panel";
 import { SteelForecastPanel } from "./steel-forecast-panel";
+import { CorporateSummaryPanel } from "./corporate-summary-panel";
 import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import {
   FileSpreadsheet,
@@ -30,6 +31,7 @@ import {
   GanttChartSquare,
   ClipboardList,
   Flame,
+  LayoutDashboard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ const defaultPreset = PRESETS.find((p) => p.id === "ytd-2026")!;
 const defaultRange = defaultPreset.range!;
 
 type TabId =
+  | "summary"
   | "performance"
   | "feeds"
   | "dodge"
@@ -48,6 +51,7 @@ type TabId =
   | "steel";
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
+  { id: "summary", label: "Summary", icon: LayoutDashboard },
   { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
@@ -60,7 +64,7 @@ const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
 export function Dashboard() {
   const [preset, setPreset] = useState<DatePreset>("ytd-2026");
   const [range, setRange] = useState<DateRange>(defaultRange);
-  const [tab, setTab] = useState<TabId>("performance");
+  const [tab, setTab] = useState<TabId>("summary");
   const { data: feeds } = useConstructionFeeds(true);
 
   const metrics = useMemo(() => computeMetrics(range), [range]);
@@ -148,6 +152,8 @@ export function Dashboard() {
         </header>
 
         <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 sm:py-8">
+          {tab === "summary" && <CorporateSummaryPanel onNavigate={(id) => setTab(id)} />}
+
           {tab === "performance" && (
             <>
               <section className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
