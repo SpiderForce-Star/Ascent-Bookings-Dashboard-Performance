@@ -7,8 +7,9 @@ import {
   stateSalesSheets,
   type StateSalesSheet,
 } from "@/data/sales-sheets";
-import { plant, regionLabels, territoryStates, type TerritoryState } from "@/data/territory";
+import { regionLabels, type TerritoryState } from "@/data/territory";
 import { BUILDING_LABEL, STAGE_LABEL } from "@/data/dodge";
+import { useTerritory, type ManagedTerritoryState } from "@/lib/territory-store";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -25,26 +26,33 @@ type RegionFilter = "all" | TerritoryState["region"];
 type SortKey = "demand" | "pipeline" | "miles" | "name";
 
 interface SheetOverrides {
-  salesperson: string;
+  /** Sheet-local only when not using territory assignedRep; kept for vpNotes/quota */
+  salesperson?: string;
   vpNotes: string;
   quotaTarget: number;
 }
 
 export function SalesSheetsPanel() {
+  const { states: territoryList, updateState, plant } = useTerritory();
   const [selected, setSelected] = useState<string | null>(null);
   const [regionFilter, setRegionFilter] = useState<RegionFilter>("all");
   const [sort, setSort] = useState<SortKey>("demand");
   const [overrides, setOverrides] = useState<Record<string, SheetOverrides>>({});
 
   const rows = useMemo(() => {
-    let list = territoryStates.map((st) => {
+    let list = territoryList.map((st) => {
       const sheet = stateSalesSheets.find((s) => s.code === st.code)!;
       const ov = overrides[st.code];
+      // Prefer territory-store assigned rep (shared with Territory tab); no demo names
+      const rep = st.assignedRep.trim() || ov?.salesperson?.trim() || sheet.salesperson || "";
       return {
         state: st,
         sheet: {
           ...sheet,
-          salesperson: ov?.salesperson ?? sheet.salesperson,
+          salesperson: rep,
+          // Prefer live territory notes/metrics for handoff alignment
+          marketNotes: st.notes || sheet.marketNotes,
+          pembShare: st.pembShare,
           vpNotes: ov?.vpNotes ?? sheet.vpNotes,
           quotaTarget: ov?.quotaTarget ?? sheet.quotaTarget,
         } as StateSalesSheet,
@@ -60,18 +68,23 @@ export function SalesSheetsPanel() {
       return a.state.name.localeCompare(b.state.name);
     });
     return list;
-  }, [regionFilter, sort, overrides]);
+  }, [territoryList, regionFilter, sort, overrides]);
 
   const selectedRow = selected ? rows.find((r) => r.state.code === selected) ?? null : null;
 
-  function patchSheet(code: string, patch: Partial<SheetOverrides>) {
+  function patchSheet(code: string, patch: Partial<SheetOverrides & { salesperson: string }>) {
+    if (patch.salesperson !== undefined) {
+      // Keep Territory + Sales Sheets in sync
+      updateState(code, { assignedRep: patch.salesperson });
+    }
     setOverrides((prev) => {
       const base = prev[code] ?? {
-        salesperson: stateSalesSheets.find((s) => s.code === code)!.salesperson,
         vpNotes: stateSalesSheets.find((s) => s.code === code)!.vpNotes,
         quotaTarget: stateSalesSheets.find((s) => s.code === code)!.quotaTarget,
       };
-      return { ...prev, [code]: { ...base, ...patch } };
+      const next = { ...base, ...patch };
+      delete (next as { salesperson?: string }).salesperson;
+      return { ...prev, [code]: next };
     });
   }
 
@@ -97,25 +110,29 @@ export function SalesSheetsPanel() {
       "VPNotes",
     ];
     const lines = [header.join(",")];
-    for (const { state, sheet } of territoryStates.map((st) => {
+    // Full footprint (not UI filter) so export matches Territory CSV scope
+    const exportRows = territoryList.map((st) => {
       const base = stateSalesSheets.find((s) => s.code === st.code)!;
       const ov = overrides[st.code];
       return {
         state: st,
         sheet: {
           ...base,
-          salesperson: ov?.salesperson ?? base.salesperson,
+          salesperson: st.assignedRep.trim() || base.salesperson || "",
+          marketNotes: st.notes || base.marketNotes,
+          pembShare: st.pembShare,
           vpNotes: ov?.vpNotes ?? base.vpNotes,
           quotaTarget: ov?.quotaTarget ?? base.quotaTarget,
-        },
+        } as StateSalesSheet,
       };
-    })) {
+    });
+    for (const { state, sheet } of exportRows) {
       const cells = [
         state.name,
         state.code,
         state.region,
         String(state.milesFromPlant),
-        sheet.salesperson,
+        sheet.salesperson.trim(),
         String(state.demand),
         String(state.pipeline),
         String(sheet.pipelineDollars),
@@ -230,10 +247,12 @@ export function SalesSheetsPanel() {
                   {state.name}{" "}
                   <span className="text-sm font-medium text-[var(--color-fg-subtle)]">{state.code}</span>
                 </p>
-                <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--color-fg-muted)]">
-                  <User className="size-3" />
-                  {sheet.salesperson}
-                </p>
+                {sheet.salesperson.trim() !== "" && (
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--color-fg-muted)]">
+                    <User className="size-3" />
+                    {sheet.salesperson}
+                  </p>
+                )}
               </div>
               <Badge
                 variant={
@@ -246,9 +265,12 @@ export function SalesSheetsPanel() {
 
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
               <MiniStat label="Demand" value={String(state.demand)} />
-              <MiniStat label="Pipeline $" value={formatCurrency(sheet.pipelineDollars, true)} />
-              <MiniStat label="PEMB" value={`${(sheet.pembShare * 100).toFixed(0)}%`} />
+              <MiniStat label="Pipeline idx" value={String(state.pipeline)} />
+              <MiniStat label="PEMB" value={`${(state.pembShare * 100).toFixed(0)}%`} />
             </div>
+            <p className="mt-1 text-center text-[10px] text-[var(--color-fg-subtle)]">
+              Illus. pipeline {formatCurrency(sheet.pipelineDollars, true)}
+            </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-fg-subtle)]">
               <span className="inline-flex items-center gap-1">
@@ -271,8 +293,8 @@ export function SalesSheetsPanel() {
       </div>
 
       <p className="text-[11px] text-[var(--color-fg-subtle)]">
-        Salesperson names and quotas are editable placeholders for VP Sales assignment. Opportunity $ is demo /
-        illustrative pipeline for handoff — keep real bookings on the Performance tab.
+        Regional rep fields start blank for VP Sales to assign. Quotas and opportunity $ are illustrative
+        planning data for handoff — keep real bookings on the Performance tab.
       </p>
     </div>
   );
@@ -285,10 +307,10 @@ function StateSheetDetail({
   onPatch,
   onPrint,
 }: {
-  state: TerritoryState;
+  state: ManagedTerritoryState | TerritoryState;
   sheet: StateSalesSheet;
   onBack: () => void;
-  onPatch: (patch: Partial<SheetOverrides>) => void;
+  onPatch: (patch: Partial<SheetOverrides & { salesperson: string }>) => void;
   onPrint: () => void;
 }) {
   return (
@@ -347,7 +369,9 @@ function StateSheetDetail({
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-base">Assignment</CardTitle>
-            <CardDescription>Editable placeholders for VP Sales handoff</CardDescription>
+            <CardDescription>
+              Shared with Territory tab — blank until VP assigns (synced in this browser)
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-0">
             <label className="block text-xs font-medium text-[var(--color-fg-subtle)]">
@@ -355,6 +379,7 @@ function StateSheetDetail({
               <input
                 className="mt-1 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm print:border-0 print:bg-transparent print:px-0"
                 value={sheet.salesperson}
+                placeholder="Assign rep…"
                 onChange={(e) => onPatch({ salesperson: e.target.value })}
               />
             </label>

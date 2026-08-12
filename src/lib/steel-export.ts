@@ -6,7 +6,12 @@
 import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { RiskFactors, SteelAdjustedRow, TornadoRow } from "@/data/steel-forecast";
+import type {
+  RiskFactors,
+  SteelAdjustedRow,
+  SteelPriceAlert,
+  TornadoRow,
+} from "@/data/steel-forecast";
 import { STEEL_CATEGORIES, tornadoImpacts } from "@/data/steel-forecast";
 
 // ── Design tokens (match styles.css) ────────────────────────────────────────
@@ -44,6 +49,8 @@ export interface ExportSteelForecastInput {
   /** Optional precomputed tornado; regenerated if omitted */
   tornado?: TornadoRow[];
   baseRowsForTornado?: SteelAdjustedRow[];
+  /** Active steel price alerts at export time */
+  alerts?: SteelPriceAlert[];
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -146,6 +153,7 @@ export async function exportSteelForecastWorkbook(
     stateSummaries,
     focusCategory = "Overall",
     modelSource = "Sample / Offline",
+    alerts = [],
   } = input;
 
   const wb = new ExcelJS.Workbook();
@@ -241,6 +249,57 @@ export async function exportSteelForecastWorkbook(
       ws,
       r,
       "Methodology: Base path follows refined high-accuracy MoM patterns (±0.4–0.5%) aligned with Fast Markets and hybrid seasonal trains. Risk-adjusted path applies tariff pass-through, China dumping pressure/premium, geo risk premium (8–11% band), and social/demand volatility oscillation with category-specific multipliers and horizon weighting. Categories target PEMB/MBMA production mix (plates, beams/channels, sub-framing, sheet/trim, HSS, TNFAB). CONFIDENTIAL — internal Ascent Buildings LLC leadership review. Not licensed market data.",
+    );
+  }
+
+  // ── 1b. Active price alerts ─────────────────────────────────────────────
+  {
+    const ws = wb.addWorksheet("Alerts", {
+      views: [{ state: "frozen", ySplit: 1 }],
+      properties: { tabColor: { argb: `FF${ASCENT_RED}` } },
+    });
+    const headers = [
+      "Severity",
+      "Category",
+      "Metric",
+      "Message",
+      "Value",
+      "Threshold",
+      "Direction",
+    ];
+    ws.addRow(headers);
+    styleHeaderRow(ws.getRow(1), headers.length);
+    if (alerts.length === 0) {
+      ws.addRow(["—", "—", "—", "No steel price alerts at export time", "", "", ""]);
+    } else {
+      for (const a of alerts) {
+        const excelRow = ws.addRow([
+          a.severity,
+          a.category,
+          a.metric,
+          a.message,
+          a.metric === "pemb_margin" || a.metric === "mom_spike"
+            ? a.value
+            : a.value * 100,
+          a.metric === "pemb_margin" || a.metric === "mom_spike"
+            ? a.threshold
+            : a.threshold * 100,
+          a.direction,
+        ]);
+        if (a.severity === "critical") {
+          excelRow.getCell(1).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: `FF${SOFT_RED}` },
+          };
+        }
+      }
+    }
+    autoWidth(ws, 10, 56);
+    addFooterNote(
+      ws,
+      alerts.length + 4,
+      "Alerts are advisory thresholds on the risk-adjusted path (Base vs Adjusted, MoM, 6-mo horizon, PEMB margin drag). Not investment advice.",
     );
   }
 

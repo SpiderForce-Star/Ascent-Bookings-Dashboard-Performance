@@ -87,7 +87,66 @@ export const GEO_SENSITIVITY = 0.55;
 export const VOL_MEAN_PREMIUM = 0.1;
 export const VOL_OSC_AMPLITUDE = 0.06;
 export const DEFAULT_GEO_IN_BASE = 9.0;
-export const ALERT_THRESHOLD = 0.03; // ±3% Base vs Adjusted
+export const ALERT_THRESHOLD = 0.03; // ±3% Base vs Adjusted (watch)
+export const ALERT_THRESHOLD_CRITICAL = 0.06; // ±6% Base vs Adjusted (critical)
+export const ALERT_MOM_SPIKE_PCT = 2.5; // |MoM_Pct| points (data is in % units, e.g. 0.5 = 0.5%)
+export const ALERT_HORIZON_UPLIFT = 0.08; // max adj in next 6 mo ≥ start * 1.08
+export const ALERT_PEMB_MARGIN_DOLLARS = 15_000; // pass-through material $ drag
+export const ALERT_PEMB_MARGIN_PTS = 0.5; // GM pts on typical contract
+
+export type SteelAlertSeverity = "info" | "watch" | "critical";
+export type SteelAlertMetric =
+  | "base_vs_adjusted"
+  | "mom_spike"
+  | "horizon_high"
+  | "pemb_margin";
+
+export interface SteelPriceAlert {
+  id: string;
+  severity: SteelAlertSeverity;
+  category: string;
+  metric: SteelAlertMetric;
+  message: string;
+  /** e.g. uplift as decimal (0.07) or $ or MoM % points */
+  value: number;
+  threshold: number;
+  direction: "up" | "down" | "either";
+}
+
+export interface SteelAlertThresholds {
+  /** |avg(adj/base-1)| watch (default 0.03) */
+  baseVsAdj: number;
+  /** |avg(adj/base-1)| critical (default 0.06) */
+  baseVsAdjCritical: number;
+  /** |MoM_Pct| in percent points (default 2.5) */
+  mom: number;
+  /** Horizon max adj / start base - 1 (default 0.08) */
+  horizon: number;
+  /** PEMB material $ drag (pass-through) */
+  pembDollars: number;
+  /** PEMB GM pts drag */
+  pembPts: number;
+}
+
+export const DEFAULT_STEEL_ALERT_THRESHOLDS: SteelAlertThresholds = {
+  baseVsAdj: ALERT_THRESHOLD,
+  baseVsAdjCritical: ALERT_THRESHOLD_CRITICAL,
+  mom: ALERT_MOM_SPIKE_PCT,
+  horizon: ALERT_HORIZON_UPLIFT,
+  pembDollars: ALERT_PEMB_MARGIN_DOLLARS,
+  pembPts: ALERT_PEMB_MARGIN_PTS,
+};
+
+/** Categories checked for MoM spikes beyond Overall */
+const PEMB_HEAVY_CATEGORIES = new Set([
+  "Overall",
+  "Hot Rolled Plates",
+  "HR I-Beams/Channels",
+  "HSS Round Pipes",
+  "HSS Square/Rect Tubes",
+  "TNFAB",
+  "TNFAB2nd",
+]);
 
 const CAT_TARIFF: Record<string, number> = {
   Overall: 1.0,
@@ -492,23 +551,163 @@ export function summaryMetrics(rows: SteelAdjustedRow[], category: string): Stee
   };
 }
 
-/** Categories where |avg(adj/base - 1)| ≥ ALERT_THRESHOLD */
-export function alertCategories(rows: SteelAdjustedRow[]): string[] {
-  const byCat = new Map<string, { base: number; adj: number; n: number }>();
+export interface EvaluateSteelAlertsOptions {
+  thresholds?: Partial<SteelAlertThresholds>;
+  /** Optional precomputed PEMB impact for margin rule */
+  pembImpact?: PembCostImpact | null;
+  risks?: RiskFactors;
+}
+
+/**
+ * Evaluate actionable steel price alerts from adjusted forecast rows.
+ * Used by Steel cost tab for production planning and sales pricing awareness.
+ */
+export function evaluateSteelAlerts(
+  rows: SteelAdjustedRow[],
+  _risks?: RiskFactors,
+  opts: EvaluateSteelAlertsOptions = {},
+): SteelPriceAlert[] {
+  const th: SteelAlertThresholds = {
+    ...DEFAULT_STEEL_ALERT_THRESHOLDS,
+    ...opts.thresholds,
+  };
+  const alerts: SteelPriceAlert[] = [];
+  if (!rows.length) return alerts;
+
+  const byCat = new Map<string, SteelAdjustedRow[]>();
   for (const r of rows) {
-    const cur = byCat.get(r.Category) ?? { base: 0, adj: 0, n: 0 };
-    cur.base += r.Base_Price_per_Ton;
-    cur.adj += r.Adjusted_Price_per_Ton;
-    cur.n += 1;
-    byCat.set(r.Category, cur);
+    const list = byCat.get(r.Category) ?? [];
+    list.push(r);
+    byCat.set(r.Category, list);
   }
-  const alerts: string[] = [];
-  for (const [cat, v] of byCat) {
-    if (v.n === 0) continue;
-    const ratio = v.adj / v.base - 1;
-    if (Math.abs(ratio) >= ALERT_THRESHOLD) alerts.push(cat);
+
+  // A. Base vs Adjusted average uplift
+  for (const [cat, list] of byCat) {
+    const sorted = list.slice().sort((a, b) => a.Date.localeCompare(b.Date));
+    const baseSum = sorted.reduce((s, r) => s + r.Base_Price_per_Ton, 0);
+    const adjSum = sorted.reduce((s, r) => s + r.Adjusted_Price_per_Ton, 0);
+    if (baseSum <= 0) continue;
+    const ratio = adjSum / baseSum - 1;
+    const abs = Math.abs(ratio);
+    if (abs >= th.baseVsAdj) {
+      const severity: SteelAlertSeverity =
+        abs >= th.baseVsAdjCritical ? "critical" : "watch";
+      const pct = ratio * 100;
+      alerts.push({
+        id: `bva-${cat}`,
+        severity,
+        category: cat,
+        metric: "base_vs_adjusted",
+        message: `${cat}: risk-adjusted path ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% vs base (avg)`,
+        value: ratio,
+        threshold: severity === "critical" ? th.baseVsAdjCritical : th.baseVsAdj,
+        direction: ratio >= 0 ? "up" : "down",
+      });
+    }
   }
-  return alerts;
+
+  // B. MoM spike on Overall / PEMB-heavy categories
+  for (const [cat, list] of byCat) {
+    if (!PEMB_HEAVY_CATEGORIES.has(cat)) continue;
+    const sorted = list.slice().sort((a, b) => a.Date.localeCompare(b.Date));
+    let worst: { mom: number; month: string } | null = null;
+    for (const r of sorted) {
+      // Prefer adjusted MoM when available; also check base MoM
+      const candidates = [r.Adj_MoM_Pct, r.MoM_Pct];
+      for (const mom of candidates) {
+        if (!Number.isFinite(mom)) continue;
+        if (Math.abs(mom) >= th.mom) {
+          if (!worst || Math.abs(mom) > Math.abs(worst.mom)) {
+            worst = { mom, month: r.Month };
+          }
+        }
+      }
+    }
+    if (worst) {
+      alerts.push({
+        id: `mom-${cat}-${worst.month}`,
+        severity: Math.abs(worst.mom) >= th.mom * 1.5 ? "critical" : "watch",
+        category: cat,
+        metric: "mom_spike",
+        message: `${cat}: MoM spike ${worst.mom >= 0 ? "+" : ""}${worst.mom.toFixed(2)}% in ${worst.month}`,
+        value: worst.mom,
+        threshold: th.mom,
+        direction: worst.mom >= 0 ? "up" : "down",
+      });
+    }
+  }
+
+  // C. Horizon high — max Adjusted in next 6 months ≥ start base * (1 + horizon)
+  for (const [cat, list] of byCat) {
+    const sorted = list.slice().sort((a, b) => a.Date.localeCompare(b.Date));
+    if (sorted.length < 2) continue;
+    const start = sorted[0]!;
+    const window = sorted.slice(0, 6);
+    const maxAdj = Math.max(...window.map((r) => r.Adjusted_Price_per_Ton));
+    const limit = start.Base_Price_per_Ton * (1 + th.horizon);
+    if (start.Base_Price_per_Ton > 0 && maxAdj >= limit) {
+      const uplift = maxAdj / start.Base_Price_per_Ton - 1;
+      alerts.push({
+        id: `hz-${cat}`,
+        severity: uplift >= th.horizon * 1.5 ? "critical" : "watch",
+        category: cat,
+        metric: "horizon_high",
+        message: `${cat}: peak adj $${maxAdj.toFixed(0)}/t in next 6 mo (≥ +${(th.horizon * 100).toFixed(0)}% vs start)`,
+        value: uplift,
+        threshold: th.horizon,
+        direction: "up",
+      });
+    }
+  }
+
+  // D. PEMB margin drag
+  const impact =
+    opts.pembImpact ??
+    (() => {
+      const overall = summaryMetrics(rows, "Overall");
+      if (!overall) return null;
+      return pembCostImpact(overall.avg_price, overall.avg_adj);
+    })();
+  if (impact) {
+    const dollars = Math.abs(impact.deltaCost);
+    const pts = Math.abs(impact.marginDragPctPoints);
+    if (dollars >= th.pembDollars || pts >= th.pembPts) {
+      const critical = dollars >= th.pembDollars * 1.5 || pts >= th.pembPts * 1.5;
+      alerts.push({
+        id: "pemb-margin",
+        severity: critical ? "critical" : "watch",
+        category: "Overall",
+        metric: "pemb_margin",
+        message: `PEMB job impact: material drag ${impact.deltaCost >= 0 ? "+" : ""}$${Math.round(impact.deltaCost).toLocaleString()} (${impact.marginDragPctPoints >= 0 ? "+" : ""}${impact.marginDragPctPoints.toFixed(2)} GM pts)`,
+        value: impact.deltaCost,
+        threshold: th.pembDollars,
+        direction: impact.deltaCost >= 0 ? "up" : "down",
+      });
+    }
+  }
+
+  // Severity sort: critical first, then watch, then info
+  const rank = { critical: 0, watch: 1, info: 2 };
+  return alerts.sort((a, b) => rank[a.severity] - rank[b.severity] || a.category.localeCompare(b.category));
+}
+
+/** Categories where |avg(adj/base - 1)| ≥ ALERT_THRESHOLD (delegates to evaluateSteelAlerts). */
+export function alertCategories(rows: SteelAdjustedRow[]): string[] {
+  return evaluateSteelAlerts(rows)
+    .filter((a) => a.metric === "base_vs_adjusted")
+    .map((a) => a.category);
+}
+
+export function countAlertsBySeverity(alerts: SteelPriceAlert[]): {
+  critical: number;
+  watch: number;
+  info: number;
+} {
+  return {
+    critical: alerts.filter((a) => a.severity === "critical").length,
+    watch: alerts.filter((a) => a.severity === "watch").length,
+    info: alerts.filter((a) => a.severity === "info").length,
+  };
 }
 
 export function maxRiskCategory(rows: SteelAdjustedRow[]): { category: string; uplift: number } {

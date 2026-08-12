@@ -1,6 +1,9 @@
 /**
  * Ascent Buildings market territory — Portland, TN plant + ~600-mile service area.
  * Product focus: Pre-Engineered Metal Buildings (PEMB) / CSI Division 13.
+ *
+ * Immutable seed defaults. Runtime edits (region, demand, pipeline, notes, assigned rep)
+ * live in localStorage via src/lib/territory-store.ts — do not mutate this array at runtime.
  */
 
 export interface TerritoryState {

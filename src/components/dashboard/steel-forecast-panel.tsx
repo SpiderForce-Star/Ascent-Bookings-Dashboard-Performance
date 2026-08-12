@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   Area,
   Bar,
@@ -20,12 +20,14 @@ import { Button } from "@/components/ui/button";
 import {
   ALERT_THRESHOLD,
   BASELINE,
+  DEFAULT_STEEL_ALERT_THRESHOLDS,
   PEMB_DIV13_TAG,
   SAMPLE_STEEL_ROWS,
-  alertCategories,
   applyLiveFeedBias,
   availableCategories,
   cloneRisks,
+  countAlertsBySeverity,
+  evaluateSteelAlerts,
   maxRiskCategory,
   parseExcelMatrix,
   pembCostImpact,
@@ -35,7 +37,9 @@ import {
   tornadoImpacts,
   type RiskFactors,
   type SteelAdjustedRow,
+  type SteelAlertThresholds,
   type SteelBaseRow,
+  type SteelPriceAlert,
 } from "@/data/steel-forecast";
 import { buildSteelStateSheets } from "@/data/steel-state-sheets";
 import {
@@ -47,6 +51,9 @@ import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   AlertTriangle,
+  Bell,
+  BellOff,
+  ChevronDown,
   Download,
   Factory,
   FileSpreadsheet,
@@ -57,6 +64,28 @@ import {
   Upload,
   Layers,
 } from "lucide-react";
+
+const ALERT_THRESHOLDS_KEY = "ascent-steel-alert-thresholds-v1";
+
+function loadAlertThresholds(): SteelAlertThresholds {
+  if (typeof window === "undefined") return { ...DEFAULT_STEEL_ALERT_THRESHOLDS };
+  try {
+    const raw = localStorage.getItem(ALERT_THRESHOLDS_KEY);
+    if (!raw) return { ...DEFAULT_STEEL_ALERT_THRESHOLDS };
+    const p = JSON.parse(raw) as Partial<SteelAlertThresholds>;
+    return { ...DEFAULT_STEEL_ALERT_THRESHOLDS, ...p };
+  } catch {
+    return { ...DEFAULT_STEEL_ALERT_THRESHOLDS };
+  }
+}
+
+function saveAlertThresholds(t: SteelAlertThresholds) {
+  try {
+    localStorage.setItem(ALERT_THRESHOLDS_KEY, JSON.stringify(t));
+  } catch {
+    /* ignore */
+  }
+}
 
 type SteelView = "overview" | "deep" | "sensitivity" | "export" | "states";
 
@@ -105,6 +134,12 @@ export function SteelForecastPanel() {
   const [liveBias, setLiveBias] = useState(false);
   const [passThrough, setPassThrough] = useState(0.72);
   const [tonsPerJob, setTonsPerJob] = useState(85);
+  const [alertThresholds, setAlertThresholds] = useState<SteelAlertThresholds>(loadAlertThresholds);
+  const [showAlertSettings, setShowAlertSettings] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">(
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  );
+  const notifiedIds = useRef<Set<string>>(new Set());
   const { data: feeds } = useConstructionFeeds(true);
 
   const effectiveRisks = useMemo(
@@ -112,13 +147,23 @@ export function SteelForecastPanel() {
     [appliedRisks, feeds.signal.compositeIndex, liveBias],
   );
 
+  /** Draft risks (live bias) — alerts recompute as sliders move, before Apply */
+  const draftEffectiveRisks = useMemo(
+    () => applyLiveFeedBias(draftRisks, feeds.signal.compositeIndex, liveBias),
+    [draftRisks, feeds.signal.compositeIndex, liveBias],
+  );
+
   const adjusted = useMemo(
     () => regenerateForecast(baseRows, effectiveRisks, true),
     [baseRows, effectiveRisks],
   );
 
+  const alertPath = useMemo(
+    () => regenerateForecast(baseRows, draftEffectiveRisks, true),
+    [baseRows, draftEffectiveRisks],
+  );
+
   const cats = useMemo(() => availableCategories(baseRows), [baseRows]);
-  const alerts = useMemo(() => alertCategories(adjusted), [adjusted]);
   const metrics = useMemo(() => summaryMetrics(adjusted, category), [adjusted, category]);
   const overallMetrics = useMemo(() => summaryMetrics(adjusted, "Overall"), [adjusted]);
   const hottest = useMemo(() => maxRiskCategory(adjusted), [adjusted]);
@@ -131,6 +176,72 @@ export function SteelForecastPanel() {
       tonsPerProject: tonsPerJob,
     });
   }, [overallMetrics, passThrough, tonsPerJob]);
+
+  const alertPembImpact = useMemo(() => {
+    const om = summaryMetrics(alertPath, "Overall");
+    if (!om) return null;
+    return pembCostImpact(om.avg_price, om.avg_adj, {
+      passThroughPct: passThrough,
+      tonsPerProject: tonsPerJob,
+    });
+  }, [alertPath, passThrough, tonsPerJob]);
+
+  const priceAlerts = useMemo(
+    () =>
+      evaluateSteelAlerts(alertPath, draftEffectiveRisks, {
+        thresholds: alertThresholds,
+        pembImpact: alertPembImpact,
+      }),
+    [alertPath, draftEffectiveRisks, alertThresholds, alertPembImpact],
+  );
+
+  /** Categories with base-vs-adjusted alerts (for category chips) */
+  const alertCats = useMemo(
+    () =>
+      priceAlerts
+        .filter((a) => a.metric === "base_vs_adjusted")
+        .map((a) => a.category),
+    [priceAlerts],
+  );
+
+  const alertCounts = useMemo(() => countAlertsBySeverity(priceAlerts), [priceAlerts]);
+
+  // Browser notification for new critical alerts (once per id per session)
+  useEffect(() => {
+    if (notifPermission !== "granted") return;
+    if (typeof Notification === "undefined") return;
+    const critical = priceAlerts.filter((a) => a.severity === "critical");
+    const fresh = critical.filter((a) => !notifiedIds.current.has(a.id));
+    if (fresh.length === 0) return;
+    const first = fresh[0]!;
+    try {
+      new Notification("Ascent Steel Alert", {
+        body: first.message,
+        tag: "ascent-steel-critical",
+        icon: "/icons/icon-192.png",
+      });
+      for (const a of fresh) notifiedIds.current.add(a.id);
+    } catch {
+      /* ignore */
+    }
+  }, [priceAlerts, notifPermission]);
+
+  function patchAlertThresholds(partial: Partial<SteelAlertThresholds>) {
+    setAlertThresholds((prev) => {
+      const next = { ...prev, ...partial };
+      saveAlertThresholds(next);
+      return next;
+    });
+  }
+
+  async function enableBrowserAlerts() {
+    if (typeof Notification === "undefined") {
+      setNotifPermission("unsupported");
+      return;
+    }
+    const p = await Notification.requestPermission();
+    setNotifPermission(p);
+  }
 
   const catSeries = useMemo(
     () =>
@@ -307,7 +418,7 @@ export function SteelForecastPanel() {
                 onClick={() => setCategory(c)}
               >
                 {c}
-                {alerts.includes(c) && (
+                {alertCats.includes(c) && (
                   <AlertTriangle className="ml-1 size-3 text-[var(--color-warn)]" />
                 )}
               </Button>
@@ -369,6 +480,23 @@ export function SteelForecastPanel() {
         </CardContent>
       </Card>
 
+      {/* Steel price alerts board */}
+      <SteelAlertsBoard
+        alerts={priceAlerts}
+        counts={alertCounts}
+        thresholds={alertThresholds}
+        showSettings={showAlertSettings}
+        onToggleSettings={() => setShowAlertSettings((v) => !v)}
+        onPatchThresholds={patchAlertThresholds}
+        onResetThresholds={() => {
+          const d = { ...DEFAULT_STEEL_ALERT_THRESHOLDS };
+          setAlertThresholds(d);
+          saveAlertThresholds(d);
+        }}
+        notifPermission={notifPermission}
+        onEnableNotifications={() => void enableBrowserAlerts()}
+      />
+
       {/* Sub-nav */}
       <div className="flex flex-wrap gap-1.5">
         {VIEWS.map((v) => (
@@ -398,6 +526,7 @@ export function SteelForecastPanel() {
           tonsPerJob={tonsPerJob}
           onPassThrough={setPassThrough}
           onTons={setTonsPerJob}
+          priceAlerts={priceAlerts}
         />
       )}
       {view === "deep" && <DeepDiveView rows={adjusted} category={category} series={catSeries} />}
@@ -414,6 +543,7 @@ export function SteelForecastPanel() {
               stateSummaries: stateSheets,
               focusCategory: category,
               modelSource,
+              alerts: priceAlerts,
             })
           }
         />
@@ -427,6 +557,7 @@ export function SteelForecastPanel() {
               stateSummaries: stateSheets,
               focusCategory: category,
               modelSource,
+              alerts: priceAlerts,
             })
           }
           onPdf={() => downloadSteelPdf(adjusted, effectiveRisks, category, modelSource)}
@@ -438,6 +569,7 @@ export function SteelForecastPanel() {
               stateSummaries: stateSheets,
               focusCategory: category,
               modelSource,
+              alerts: priceAlerts,
             })
           }
           category={category}
@@ -526,6 +658,224 @@ function MetricCard({
   );
 }
 
+function SteelAlertsBoard({
+  alerts,
+  counts,
+  thresholds,
+  showSettings,
+  onToggleSettings,
+  onPatchThresholds,
+  onResetThresholds,
+  notifPermission,
+  onEnableNotifications,
+}: {
+  alerts: SteelPriceAlert[];
+  counts: { critical: number; watch: number; info: number };
+  thresholds: SteelAlertThresholds;
+  showSettings: boolean;
+  onToggleSettings: () => void;
+  onPatchThresholds: (p: Partial<SteelAlertThresholds>) => void;
+  onResetThresholds: () => void;
+  notifPermission: NotificationPermission | "unsupported";
+  onEnableNotifications: () => void;
+}) {
+  return (
+    <Card
+      className={cn(
+        counts.critical > 0 && "border-[var(--color-danger)]/35",
+        counts.critical === 0 && counts.watch > 0 && "border-[var(--color-warn)]/40",
+      )}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle
+                className={cn(
+                  "size-4",
+                  counts.critical > 0
+                    ? "text-[var(--color-danger)]"
+                    : counts.watch > 0
+                      ? "text-[var(--color-warn)]"
+                      : "text-[var(--color-fg-subtle)]",
+                )}
+              />
+              Steel price alerts
+            </CardTitle>
+            <CardDescription>
+              Watch / critical thresholds on Base vs Adjusted, MoM spikes, 6-mo horizon, and PEMB margin drag.
+              Advisory for production & sales — not auto-pricing.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {counts.critical > 0 && (
+              <Badge variant="danger" className="tabular">
+                {counts.critical} critical
+              </Badge>
+            )}
+            {counts.watch > 0 && (
+              <Badge variant="warn" className="tabular">
+                {counts.watch} watch
+              </Badge>
+            )}
+            {alerts.length === 0 && <Badge variant="secondary">No alerts</Badge>}
+            <Button type="button" size="sm" variant="secondary" className="h-8 gap-1" onClick={onToggleSettings}>
+              <ChevronDown className={cn("size-3.5 transition-transform", showSettings && "rotate-180")} />
+              Alert settings
+            </Button>
+            {notifPermission !== "unsupported" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-8 gap-1"
+                onClick={onEnableNotifications}
+                disabled={notifPermission === "granted"}
+              >
+                {notifPermission === "granted" ? (
+                  <Bell className="size-3.5 text-[var(--color-success)]" />
+                ) : (
+                  <BellOff className="size-3.5" />
+                )}
+                {notifPermission === "granted" ? "Browser alerts on" : "Enable browser alerts"}
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {alerts.length === 0 ? (
+          <p className="rounded-[var(--radius-sm)] bg-[var(--color-bg)] px-3 py-3 text-sm text-[var(--color-fg-muted)]">
+            No steel price alerts at current risk settings.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {alerts.map((a) => (
+              <li
+                key={a.id}
+                className={cn(
+                  "rounded-[var(--radius-md)] border px-3 py-2.5 text-sm",
+                  a.severity === "critical" &&
+                    "border-[var(--color-danger)]/25 bg-[var(--color-danger-soft)]/60",
+                  a.severity === "watch" && "border-[var(--color-warn)]/30 bg-[var(--color-warn-soft)]/50",
+                  a.severity === "info" && "border-[var(--color-border)] bg-[var(--color-bg)]",
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={
+                      a.severity === "critical" ? "danger" : a.severity === "watch" ? "warn" : "secondary"
+                    }
+                    className="capitalize"
+                  >
+                    {a.severity}
+                  </Badge>
+                  <span className="text-xs font-medium text-[var(--color-fg-subtle)]">{a.category}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-[var(--color-fg-subtle)]">
+                    {a.metric.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <p className="mt-1 font-medium text-[var(--color-fg)]">{a.message}</p>
+                <p className="mt-0.5 text-[11px] tabular text-[var(--color-fg-subtle)]">
+                  Value {formatAlertValue(a)} · threshold {formatAlertThreshold(a)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {showSettings && (
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+            <p className="mb-2 text-xs font-semibold text-[var(--color-fg)]">
+              Thresholds (saved in this browser)
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <ThreshField
+                label="Base vs adj watch (%)"
+                value={thresholds.baseVsAdj * 100}
+                onChange={(v) => onPatchThresholds({ baseVsAdj: v / 100 })}
+              />
+              <ThreshField
+                label="Base vs adj critical (%)"
+                value={thresholds.baseVsAdjCritical * 100}
+                onChange={(v) => onPatchThresholds({ baseVsAdjCritical: v / 100 })}
+              />
+              <ThreshField
+                label="MoM spike (|%|)"
+                value={thresholds.mom}
+                onChange={(v) => onPatchThresholds({ mom: v })}
+              />
+              <ThreshField
+                label="6-mo horizon uplift (%)"
+                value={thresholds.horizon * 100}
+                onChange={(v) => onPatchThresholds({ horizon: v / 100 })}
+              />
+              <ThreshField
+                label="PEMB $ drag"
+                value={thresholds.pembDollars}
+                onChange={(v) => onPatchThresholds({ pembDollars: v })}
+                step={500}
+              />
+              <ThreshField
+                label="PEMB GM pts"
+                value={thresholds.pembPts}
+                onChange={(v) => onPatchThresholds({ pembPts: v })}
+                step={0.1}
+              />
+            </div>
+            <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={onResetThresholds}>
+              Reset to defaults
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ThreshField({
+  label,
+  value,
+  onChange,
+  step = 0.5,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+}) {
+  return (
+    <label className="block text-xs text-[var(--color-fg-subtle)]">
+      {label}
+      <input
+        type="number"
+        step={step}
+        className="mt-1 h-8 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-2 text-sm tabular"
+        value={Number.isInteger(step) ? value : Math.round(value * 100) / 100}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+
+function formatAlertValue(a: SteelPriceAlert): string {
+  if (a.metric === "base_vs_adjusted" || a.metric === "horizon_high") {
+    return `${(a.value * 100).toFixed(1)}%`;
+  }
+  if (a.metric === "mom_spike") return `${a.value.toFixed(2)}%`;
+  if (a.metric === "pemb_margin") return formatCurrency(a.value);
+  return String(a.value);
+}
+
+function formatAlertThreshold(a: SteelPriceAlert): string {
+  if (a.metric === "base_vs_adjusted" || a.metric === "horizon_high") {
+    return `±${(a.threshold * 100).toFixed(1)}%`;
+  }
+  if (a.metric === "mom_spike") return `±${a.threshold.toFixed(1)}%`;
+  if (a.metric === "pemb_margin") return formatCurrency(a.threshold);
+  return String(a.threshold);
+}
+
 function OverviewView({
   metrics,
   overallMetrics,
@@ -538,6 +888,7 @@ function OverviewView({
   tonsPerJob,
   onPassThrough,
   onTons,
+  priceAlerts,
 }: {
   metrics: ReturnType<typeof summaryMetrics>;
   overallMetrics: ReturnType<typeof summaryMetrics>;
@@ -556,9 +907,24 @@ function OverviewView({
   tonsPerJob: number;
   onPassThrough: (v: number) => void;
   onTons: (v: number) => void;
+  priceAlerts: SteelPriceAlert[];
 }) {
   return (
     <div className="space-y-4">
+      {priceAlerts.length > 0 && (
+        <div className="hidden print:block">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-primary)]">
+            Active steel alerts
+          </p>
+          <ul className="mt-1 list-disc pl-4 text-xs">
+            {priceAlerts.map((a) => (
+              <li key={a.id}>
+                [{a.severity}] {a.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label={`${category} current base`}

@@ -1,6 +1,7 @@
 /**
  * State sales summary sheets — VP Sales / Marketing handoff packs.
- * Placeholder salesperson names, PEMB/Division 13 metrics, and sample opportunities.
+ * PEMB/Division 13 metrics and sample opportunities.
+ * Regional rep assignment is intentionally blank — VP assigns offline or in the UI.
  * Pipeline $ and project counts are illustrative planning data (not booked revenue).
  */
 
@@ -32,7 +33,7 @@ export interface CallContact {
 
 export interface StateSalesSheet {
   code: string;
-  /** Editable placeholder — regional salesperson assignment */
+  /** Regional salesperson — blank until VP assigns (no seeded demo names) */
   salesperson: string;
   /** Short market narrative for the rep */
   marketNotes: string;
@@ -60,24 +61,25 @@ export interface StateSalesSheet {
 /** Default PEMB share of commercial shell work Ascent pursues. */
 export const DEFAULT_PEMB_SHARE = 0.72;
 
+/** Intentionally empty — VP assigns reps offline or via the Sales Sheets UI. */
 const SALESPEOPLE: Record<string, string> = {
-  TN: "Marcus Hale",
-  KY: "Marcus Hale",
-  AL: "Jordan Whitfield",
-  GA: "Jordan Whitfield",
-  MS: "Jordan Whitfield",
-  AR: "Casey Nguyen",
-  MO: "Casey Nguyen",
-  IL: "Riley Brooks",
-  IN: "Riley Brooks",
-  OH: "Riley Brooks",
-  WV: "Avery Quinn",
-  PA: "Avery Quinn",
-  VA: "Avery Quinn",
-  NC: "Sam Delgado",
-  SC: "Sam Delgado",
-  FL: "Sam Delgado",
-  TX: "Casey Nguyen",
+  TN: "",
+  KY: "",
+  AL: "",
+  GA: "",
+  MS: "",
+  AR: "",
+  MO: "",
+  IL: "",
+  IN: "",
+  OH: "",
+  WV: "",
+  PA: "",
+  VA: "",
+  NC: "",
+  SC: "",
+  FL: "",
+  TX: "",
 };
 
 type SeedOpp = Omit<StateOpportunity, "id">;
@@ -938,7 +940,7 @@ function buildSheet(state: TerritoryState): StateSalesSheet {
 
   return {
     code: state.code,
-    salesperson: SALESPEOPLE[state.code] ?? "Unassigned",
+    salesperson: SALESPEOPLE[state.code] ?? "",
     marketNotes: MARKET_NOTES[state.code] ?? state.notes,
     vpNotes: VP_NOTES[state.code] ?? "",
     quotaTarget,
