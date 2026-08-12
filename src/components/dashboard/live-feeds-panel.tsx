@@ -125,6 +125,12 @@ export function LiveFeedsPanel() {
             {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             Refresh
           </Button>
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-fg-subtle)]">
+              <Loader2 className="size-3 animate-spin" />
+              Updating feeds…
+            </span>
+          )}
         </div>
       </div>
 

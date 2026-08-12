@@ -90,7 +90,7 @@ export function getDodgeConnectionStatus(message?: string): DodgeConnectionStatu
       mode: "demo",
       message:
         message ??
-        "Dodge API credentials not set. Showing demo SE pipeline. Set DODGE_API_BASE_URL + DODGE_CLIENT_ID/SECRET or DODGE_ACCESS_TOKEN on the server (Vercel env — never VITE_*).",
+        "Demo SE process board for territory workflow. Not live Dodge Construction Network data. OAuth is not configured (by design — website login is never used).",
       baseUrl: c.baseUrl,
       hasClientId: Boolean(c.clientId),
       hasClientSecret: Boolean(c.clientSecret),
@@ -585,9 +585,13 @@ function demoResponse(
   minValuation: number,
   status: DodgeConnectionStatus,
 ): DodgeProjectsResponse {
-  const projects = DEMO_DODGE_PROJECTS.filter(
+  let projects = DEMO_DODGE_PROJECTS.filter(
     (p) => p.milesFromPlant <= maxMiles && p.valuation >= minValuation,
   ).sort(preferPembThenValue);
+  // Never ship an empty demo board (mis-tuned filters / stale dataset)
+  if (projects.length === 0) {
+    projects = [...DEMO_DODGE_PROJECTS].sort(preferPembThenValue);
+  }
   return {
     fetchedAt: new Date().toISOString(),
     status,

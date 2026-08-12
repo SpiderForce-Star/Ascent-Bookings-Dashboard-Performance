@@ -122,7 +122,9 @@ export const DODGE_TERRITORY_STATES = [
 ] as const;
 
 /**
- * Demo projects — illustrative SE commercial pipeline near Portland, TN.
+ * Demo projects (≥20) — illustrative SE commercial pipeline near Portland, TN.
+ * Stable ids demo-001… for dismiss persistence. Valuations ≥ $1M (API min).
+ * Keep ≥12 PEMB-focused so the default product filter is never empty on first paint.
  * Replaced automatically when live Dodge credentials succeed.
  */
 export const DEMO_DODGE_PROJECTS: DodgeProject[] = [
@@ -694,3 +696,6 @@ export function inferProductLine(
 export function isPembFocused(p: Pick<DodgeProject, "productLine" | "buildingType">): boolean {
   return p.productLine === "PEMB" || PEMB_BUILDING_TYPES.includes(p.buildingType);
 }
+
+/** Default PEMB-focus filter must keep a healthy Active board in demo mode. */
+export const DEMO_PEMB_FOCUSED_COUNT = DEMO_DODGE_PROJECTS.filter(isPembFocused).length;

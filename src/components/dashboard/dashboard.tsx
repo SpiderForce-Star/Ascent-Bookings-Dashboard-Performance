@@ -105,15 +105,21 @@ export function Dashboard() {
                 {feeds.live ? "Feeds live" : "Feeds cached"}
                 <span className="tabular opacity-80">{feeds.signal.compositeIndex.toFixed(0)}</span>
               </Badge>
-              <span className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] xl:inline-flex">
+              <span
+                className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] xl:inline-flex"
+                title="Performance through July 2026 · live FRED/BLS feeds · Dodge tab is a demo process board"
+              >
                 <FileSpreadsheet className="size-3.5" />
-                YTD 2026 · Jul · FRED/BLS · Dodge
+                YTD 2026 · Jul · FRED/BLS · Dodge-ready (demo)
               </span>
             </div>
           </div>
 
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
-            <nav className="flex gap-1 overflow-x-auto pb-0" aria-label="Dashboard sections">
+            <nav
+              className="flex gap-1 overflow-x-auto overscroll-x-contain pb-0 [-ms-overflow-style:none] [scrollbar-width:thin]"
+              aria-label="Dashboard sections"
+            >
               {TABS.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -153,8 +159,8 @@ export function Dashboard() {
                     {rangeLabel}
                   </h1>
                   <p className="mt-1 max-w-xl text-sm text-[var(--color-fg-muted)]">
-                    Bookings & margin, live market signals, Dodge project pipeline, and territory forecast for
-                    Ascent Buildings.
+                    Booked revenue and margin through July 2026, live FRED/BLS market signals, and planning
+                    models for forecast, territory, and steel. Dodge pipeline is a demo process board.
                   </p>
                 </div>
                 <p className="text-xs text-[var(--color-fg-subtle)] tabular">
@@ -195,10 +201,13 @@ export function Dashboard() {
           {tab === "sales-sheets" && <SalesSheetsPanel />}
           {tab === "steel" && <SteelForecastPanel />}
 
-          <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between print:hidden">
-            <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through July 2026</p>
-            <p>
-              FRED + BLS · Dodge · Sales & steel cost forecasts · State sheets are planning models
+          <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-0.5">
+              <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through July 2026</p>
+              <p className="print:hidden">Created by Chris Woodmore · Release 8-12-2026</p>
+            </div>
+            <p className="print:hidden">
+              FRED + BLS live · Dodge demo process board · Sales & steel forecasts are planning models
             </p>
           </footer>
         </main>

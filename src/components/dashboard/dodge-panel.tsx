@@ -13,14 +13,13 @@ import {
   type ProductLine,
 } from "@/data/dodge";
 import { useDodgeProjects } from "@/hooks/use-dodge-projects";
-import { useDodgeDismissed } from "@/lib/dodge-dismiss-store";
+import { DODGE_DISMISS_STORAGE_KEY, useDodgeDismissed } from "@/lib/dodge-dismiss-store";
 import { MarketNewsSection } from "@/components/dashboard/market-news-section";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   ArchiveRestore,
   Building2,
-  ExternalLink,
-  KeyRound,
+  FilterX,
   Loader2,
   MapPin,
   Radio,
@@ -47,13 +46,18 @@ const STAGE_VARIANT: Record<
 type ProductFilter = "pemb" | "all" | ProductLine;
 type BoardTab = "active" | "removed";
 
+/** All lines on first paint so the Active board is never empty for board review. */
+const DEFAULT_PRODUCT: ProductFilter = "all";
+const DEFAULT_STAGE = "all";
+const DEFAULT_SORT: "valuation" | "miles" | "bid" = "valuation";
+
 export function DodgePanel() {
   const { data, loading, error, refresh } = useDodgeProjects(true);
-  const { dismissedIds, dismiss, restore, restoreAll, isDismissed } = useDodgeDismissed();
-  const [stageFilter, setStageFilter] = useState<string>("all");
-  /** Default All lines so the board is populated on first paint for executive review */
-  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
-  const [sort, setSort] = useState<"valuation" | "miles" | "bid">("valuation");
+  const { dismissedIds, dismissedCount, dismiss, restore, restoreAll, resetDismissed, isDismissed } =
+    useDodgeDismissed();
+  const [stageFilter, setStageFilter] = useState<string>(DEFAULT_STAGE);
+  const [productFilter, setProductFilter] = useState<ProductFilter>(DEFAULT_PRODUCT);
+  const [sort, setSort] = useState<"valuation" | "miles" | "bid">(DEFAULT_SORT);
   const [boardTab, setBoardTab] = useState<BoardTab>("active");
 
   const activeSource = useMemo(
@@ -108,21 +112,33 @@ export function DodgePanel() {
       biddingCount: bidding,
       pembShare: totalVal > 0 ? pembVal / totalVal : 0,
       avgMiles,
-      filteredCount: boardTab === "active" ? projects.length : projects.length,
-      filteredValue:
-        boardTab === "active"
-          ? projects.reduce((s, p) => s + p.valuation, 0)
-          : projects.reduce((s, p) => s + p.valuation, 0),
-      filteredBidding:
-        boardTab === "active"
-          ? projects.filter((p) => p.stage === "bidding").length
-          : projects.filter((p) => p.stage === "bidding").length,
     };
-  }, [activeSource, boardTab, projects]);
+  }, [activeSource]);
 
   const isLive = data.status.mode === "live";
+  const liveFailed = data.status.configured && data.status.mode === "demo";
   const removedCount = removedSource.length;
   const activeCount = activeSource.length;
+  const allDismissed = data.projects.length > 0 && activeCount === 0;
+  const filtersActive =
+    stageFilter !== DEFAULT_STAGE || sort !== DEFAULT_SORT || productFilter !== DEFAULT_PRODUCT;
+
+  function clearFilters() {
+    setStageFilter(DEFAULT_STAGE);
+    setSort(DEFAULT_SORT);
+    setProductFilter(DEFAULT_PRODUCT);
+  }
+
+  function handleResetDismissed() {
+    if (
+      window.confirm(
+        `Reset dismissed jobs?\n\nThis clears ${DODGE_DISMISS_STORAGE_KEY} and restores every hidden job to Active.`,
+      )
+    ) {
+      resetDismissed();
+      setBoardTab("active");
+    }
+  }
 
   function handleDismiss(id: string, title: string) {
     if (
@@ -134,31 +150,40 @@ export function DodgePanel() {
     }
   }
 
+  const emptyKind: "removed" | "all-dismissed" | "filters" | "none" | null =
+    projects.length > 0
+      ? null
+      : boardTab === "removed"
+        ? "removed"
+        : allDismissed
+          ? "all-dismissed"
+          : data.projects.length === 0
+            ? "none"
+            : "filters";
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-[var(--color-primary)]">
             <GanttChartSquare className="size-3.5" />
-            Project pipeline
+            Dodge pipeline · demo
           </div>
           <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
             Opportunities
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
-            CSI Division 13 Special Construction — pre-engineered metal building (PEMB) systems, structural
-            steel packages, and industrial / warehouse / ag / self-storage shells in the Portland, TN
-            ~600-mile footprint.{" "}
+            CSI Division 13 Special Construction — PEMB systems, structural steel packages, and industrial /
+            warehouse / ag / self-storage shells in the Portland, TN ~600-mile footprint.{" "}
             <strong className="font-medium text-[var(--color-fg)]">
-              Dismiss jobs that have gone stale so the active board stays actionable. Restore anytime from
-              the Removed tab.
+              Demo process board: dismiss stale jobs, restore from Removed, filter by product and stage.
             </strong>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isLive ? "success" : "secondary"} className="gap-1">
             <Radio className="size-3" />
-            {isLive ? "Dodge live" : "Territory pipeline"}
+            {isLive ? "Dodge live" : "Demo"}
           </Badge>
           <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
             {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
@@ -167,29 +192,44 @@ export function DodgePanel() {
         </div>
       </div>
 
-      <Card>
+      <Card className={cn(!isLive && "border-dashed", liveFailed && "border-[var(--color-warn)]/40")}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] text-[var(--color-primary)]">
-              <KeyRound className="size-5" />
+              <GanttChartSquare className="size-5" />
             </div>
             <div>
               <p className="text-sm font-semibold">
-                {data.status.configured ? "Live Dodge feed connected" : "SE territory opportunity board"}
+                {isLive ? "Dodge live" : liveFailed ? "Demo fallback" : "Demo / process board"}
               </p>
               <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
-                {data.status.configured
+                {isLive
                   ? data.status.message
-                  : "Curated industrial / warehouse / PEMB opportunities in the Portland, TN ~600-mile footprint. Dismiss stale jobs to keep Active clean for executive review."}
+                  : "Illustrative Southeast pipeline for territory workflow — not live Dodge Construction Network data. Use Active / Removed and filters the same way you would a licensed feed."}
               </p>
+              {loading && (
+                <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-[var(--color-fg-subtle)]">
+                  <Loader2 className="size-3 animate-spin" />
+                  Updating pipeline…
+                </p>
+              )}
             </div>
           </div>
+          <Badge variant={isLive ? "success" : "secondary"} className="h-7 shrink-0 gap-1 self-start">
+            <Radio className="size-3" />
+            {isLive ? "Live" : "Demo"}
+          </Badge>
         </CardContent>
       </Card>
 
-      {error && (
+      {error && data.projects.length === 0 && (
         <p className="rounded-[var(--radius-sm)] bg-[var(--color-warn-soft)] px-3 py-2 text-xs text-[var(--color-warn)]">
           {error}
+        </p>
+      )}
+      {error && data.projects.length > 0 && (
+        <p className="text-[11px] text-[var(--color-fg-subtle)]">
+          Route fetch note: {error}. Board is showing the demo pipeline.
         </p>
       )}
 
@@ -201,12 +241,16 @@ export function DodgePanel() {
         <Stat label="PEMB / Div 13 share" value={`${(activeKpis.pembShare * 100).toFixed(0)}%`} />
         <Stat label="Avg miles (active)" value={`${activeKpis.avgMiles} mi`} />
       </div>
-      {removedCount > 0 && (
-        <p className="text-[11px] text-[var(--color-fg-subtle)]">
-          {removedCount} job{removedCount === 1 ? "" : "s"} hidden on <strong className="font-medium">Removed</strong>{" "}
-          — KPIs above reflect Active only.
-        </p>
-      )}
+      <p className="text-[11px] text-[var(--color-fg-subtle)]">
+        {removedCount > 0 ? (
+          <>
+            {removedCount} job{removedCount === 1 ? "" : "s"} on{" "}
+            <strong className="font-medium">Removed</strong> — KPIs above count Active only.
+          </>
+        ) : (
+          <>Removed: 0 · KPIs count Active jobs only (filters do not change the KPI strip).</>
+        )}
+      </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Product</span>
@@ -230,6 +274,18 @@ export function DodgePanel() {
             {label}
           </Button>
         ))}
+        {filtersActive && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 rounded-full"
+            onClick={clearFilters}
+          >
+            <FilterX className="size-3.5" />
+            Clear filters
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -270,6 +326,7 @@ export function DodgePanel() {
       <p className="text-[11px] text-[var(--color-fg-muted)]">
         <strong className="font-medium text-[var(--color-fg)]">PEMB focus</strong> includes{" "}
         {PEMB_BUILDING_TYPES.map((t) => BUILDING_LABEL[t]).join(", ")} plus projects tagged PEMB / Div 13.
+        Default view is All lines so the Active board stays populated.
       </p>
 
       <Card>
@@ -282,7 +339,7 @@ export function DodgePanel() {
               </CardTitle>
               <CardDescription>
                 {boardTab === "active"
-                  ? `${projects.length} shown · Active board · min ${formatCurrency(data.filters.minValuation, true)}`
+                  ? `${projects.length} shown · ${activeCount} active · min ${formatCurrency(data.filters.minValuation, true)}`
                   : `${projects.length} shown · Removed board · restore anytime`}
               </CardDescription>
             </div>
@@ -324,6 +381,19 @@ export function DodgePanel() {
                   Restore all
                 </Button>
               )}
+              {dismissedCount > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5"
+                  title={`Clear ${DODGE_DISMISS_STORAGE_KEY}`}
+                  onClick={handleResetDismissed}
+                >
+                  <RotateCcw className="size-3.5" />
+                  Reset dismissed jobs
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -353,45 +423,19 @@ export function DodgePanel() {
                   onRestore={() => restore(p.id)}
                 />
               ))}
-              {projects.length === 0 && (
+              {emptyKind && (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-sm text-[var(--color-fg-muted)]">
-                    {boardTab === "removed" ? (
-                      <>
-                        No removed jobs. Dismiss stale opportunities from{" "}
-                        <strong className="font-medium text-[var(--color-fg)]">Active</strong> to keep the
-                        board clean.
-                      </>
-                    ) : (
-                      <>
-                        No projects match the current filters on the Active board.{" "}
-                        <button
-                          type="button"
-                          className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
-                          onClick={() => {
-                            setProductFilter("all");
-                            setStageFilter("all");
-                          }}
-                        >
-                          Clear filters
-                        </button>
-                        {removedCount > 0 && (
-                          <>
-                            {" · "}
-                            <button
-                              type="button"
-                              className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
-                              onClick={() => {
-                                restoreAll();
-                                setBoardTab("active");
-                              }}
-                            >
-                              Restore {removedCount} removed
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
+                  <td colSpan={9} className="py-10">
+                    <EmptyBoard
+                      kind={emptyKind}
+                      onClearFilters={clearFilters}
+                      onRestoreAll={() => {
+                        restoreAll();
+                        setBoardTab("active");
+                      }}
+                      onResetDismissed={handleResetDismissed}
+                      onShowRemoved={() => setBoardTab("removed")}
+                    />
                   </td>
                 </tr>
               )}
@@ -429,13 +473,91 @@ export function DodgePanel() {
       </div>
 
       <p className="text-[11px] text-[var(--color-fg-subtle)] print:hidden">
-        Project pipeline for Ascent territory review.{" "}
         {data.status.mode === "demo"
-          ? `Territory sample board (${data.projects.length} projects) for process review.`
+          ? `Demo process board (${data.projects.length} synthetic projects) — not licensed Dodge content. Website login is not used.`
           : `Live fetch ${new Date(data.fetchedAt).toLocaleString()}.`}{" "}
         Dismissed ids stored locally as{" "}
-        <code className="rounded bg-[var(--color-bg-subtle)] px-1">ascent-dodge-dismissed-v1</code>.
+        <code className="rounded bg-[var(--color-bg-subtle)] px-1">{DODGE_DISMISS_STORAGE_KEY}</code>
+        {dismissedCount === 0 && (
+          <>
+            .{" "}
+            <button
+              type="button"
+              className="underline decoration-dotted underline-offset-2 hover:text-[var(--color-fg-muted)]"
+              onClick={handleResetDismissed}
+            >
+              Reset dismissed jobs
+            </button>
+          </>
+        )}
+        .
       </p>
+    </div>
+  );
+}
+
+function EmptyBoard({
+  kind,
+  onClearFilters,
+  onRestoreAll,
+  onResetDismissed,
+  onShowRemoved,
+}: {
+  kind: "removed" | "all-dismissed" | "filters" | "none";
+  onClearFilters: () => void;
+  onRestoreAll: () => void;
+  onResetDismissed: () => void;
+  onShowRemoved: () => void;
+}) {
+  if (kind === "removed") {
+    return (
+      <div className="mx-auto max-w-md text-center text-sm text-[var(--color-fg-muted)]">
+        No removed jobs. Dismiss stale opportunities from{" "}
+        <strong className="font-medium text-[var(--color-fg)]">Active</strong> to keep the board clean.
+      </div>
+    );
+  }
+  if (kind === "all-dismissed") {
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center gap-3 text-center">
+        <p className="text-sm font-medium text-[var(--color-fg)]">All jobs moved to Removed</p>
+        <p className="text-xs text-[var(--color-fg-muted)]">
+          The Active board is empty because every opportunity was dismissed. Restore them — nothing was
+          deleted from the demo dataset.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button type="button" size="sm" onClick={onRestoreAll}>
+            <ArchiveRestore className="size-3.5" />
+            Restore all
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={onShowRemoved}>
+            View Removed
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={onResetDismissed}>
+            <RotateCcw className="size-3.5" />
+            Reset dismissed jobs
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (kind === "none") {
+    return (
+      <div className="mx-auto max-w-md text-center text-sm text-[var(--color-fg-muted)]">
+        No pipeline projects returned. Refresh the tab — demo data should always appear offline.
+      </div>
+    );
+  }
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center gap-3 text-center">
+      <p className="text-sm font-medium text-[var(--color-fg)]">No projects match filters</p>
+      <p className="text-xs text-[var(--color-fg-muted)]">
+        Active jobs exist, but the current product / stage filters hide them.
+      </p>
+      <Button type="button" size="sm" onClick={onClearFilters}>
+        <FilterX className="size-3.5" />
+        Clear filters
+      </Button>
     </div>
   );
 }
