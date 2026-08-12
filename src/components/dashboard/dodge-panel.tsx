@@ -51,8 +51,8 @@ export function DodgePanel() {
   const { data, loading, error, refresh } = useDodgeProjects(true);
   const { dismissedIds, dismiss, restore, restoreAll, isDismissed } = useDodgeDismissed();
   const [stageFilter, setStageFilter] = useState<string>("all");
-  /** Default toward industrial / warehouse / mfg / self-storage / ag PEMB work */
-  const [productFilter, setProductFilter] = useState<ProductFilter>("pemb");
+  /** Default All lines so the board is populated on first paint for executive review */
+  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
   const [sort, setSort] = useState<"valuation" | "miles" | "bid">("valuation");
   const [boardTab, setBoardTab] = useState<BoardTab>("active");
 
@@ -127,7 +127,7 @@ export function DodgePanel() {
   function handleDismiss(id: string, title: string) {
     if (
       window.confirm(
-        `Remove “${title}” from the active board?\n\nIt will move to Removed and can be restored anytime. The project is not deleted from Dodge/demo data.`,
+        `Remove “${title}” from the active board?\n\nIt will move to Removed and can be restored anytime.`,
       )
     ) {
       dismiss(id);
@@ -140,25 +140,25 @@ export function DodgePanel() {
         <div>
           <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-[var(--color-primary)]">
             <GanttChartSquare className="size-3.5" />
-            Dodge Construction Network
+            Project pipeline
           </div>
           <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
-            Project pipeline
+            Opportunities
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
             CSI Division 13 Special Construction — pre-engineered metal building (PEMB) systems, structural
             steel packages, and industrial / warehouse / ag / self-storage shells in the Portland, TN
             ~600-mile footprint.{" "}
             <strong className="font-medium text-[var(--color-fg)]">
-              Dismiss jobs that have gone stale on Dodge so the active board stays actionable. Restore
-              anytime from the Removed tab.
+              Dismiss jobs that have gone stale so the active board stays actionable. Restore anytime from
+              the Removed tab.
             </strong>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isLive ? "success" : "secondary"} className="gap-1">
             <Radio className="size-3" />
-            {isLive ? "Dodge live" : "Demo pipeline"}
+            {isLive ? "Dodge live" : "Territory pipeline"}
           </Badge>
           <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
             {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
@@ -167,7 +167,7 @@ export function DodgePanel() {
         </div>
       </div>
 
-      <Card className={cn(!data.status.configured && "border-dashed")}>
+      <Card>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] text-[var(--color-primary)]">
@@ -175,26 +175,15 @@ export function DodgePanel() {
             </div>
             <div>
               <p className="text-sm font-semibold">
-                {data.status.configured ? "Credentials configured" : "Enterprise credentials required"}
+                {data.status.configured ? "Live Dodge feed connected" : "SE territory opportunity board"}
               </p>
-              <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">{data.status.message}</p>
-              <p className="mt-2 text-[11px] text-[var(--color-fg-subtle)]">
-                Env: <code className="rounded bg-[var(--color-bg-subtle)] px-1">DODGE_API_BASE_URL</code>{" "}
-                <code className="rounded bg-[var(--color-bg-subtle)] px-1">DODGE_CLIENT_ID</code>{" "}
-                <code className="rounded bg-[var(--color-bg-subtle)] px-1">DODGE_CLIENT_SECRET</code> or{" "}
-                <code className="rounded bg-[var(--color-bg-subtle)] px-1">DODGE_ACCESS_TOKEN</code>
+              <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
+                {data.status.configured
+                  ? data.status.message
+                  : "Curated industrial / warehouse / PEMB opportunities in the Portland, TN ~600-mile footprint. Dismiss stale jobs to keep Active clean for executive review."}
               </p>
             </div>
           </div>
-          <a
-            href="https://www.construction.com/apis/"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 text-xs font-medium hover:bg-[var(--color-bg-subtle)]"
-          >
-            Request API access
-            <ExternalLink className="size-3.5" />
-          </a>
         </CardContent>
       </Card>
 
@@ -223,8 +212,8 @@ export function DodgePanel() {
         <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Product</span>
         {(
           [
-            ["pemb", "PEMB focus"],
             ["all", "All lines"],
+            ["pemb", "PEMB focus"],
             ["PEMB", "PEMB only"],
             ["Component", "Component"],
             ["Other", "Other"],
@@ -279,7 +268,7 @@ export function DodgePanel() {
       </div>
 
       <p className="text-[11px] text-[var(--color-fg-muted)]">
-        Default <strong className="font-medium text-[var(--color-fg)]">PEMB focus</strong> includes{" "}
+        <strong className="font-medium text-[var(--color-fg)]">PEMB focus</strong> includes{" "}
         {PEMB_BUILDING_TYPES.map((t) => BUILDING_LABEL[t]).join(", ")} plus projects tagged PEMB / Div 13.
       </p>
 
@@ -374,7 +363,34 @@ export function DodgePanel() {
                         board clean.
                       </>
                     ) : (
-                      "No projects match the current filters on the Active board."
+                      <>
+                        No projects match the current filters on the Active board.{" "}
+                        <button
+                          type="button"
+                          className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
+                          onClick={() => {
+                            setProductFilter("all");
+                            setStageFilter("all");
+                          }}
+                        >
+                          Clear filters
+                        </button>
+                        {removedCount > 0 && (
+                          <>
+                            {" · "}
+                            <button
+                              type="button"
+                              className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
+                              onClick={() => {
+                                restoreAll();
+                                setBoardTab("active");
+                              }}
+                            >
+                              Restore {removedCount} removed
+                            </button>
+                          </>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
@@ -413,9 +429,9 @@ export function DodgePanel() {
       </div>
 
       <p className="text-[11px] text-[var(--color-fg-subtle)] print:hidden">
-        Dodge Construction Network API · REST + OAuth 2.0 · Projects, companies/contacts, and documents.{" "}
+        Project pipeline for Ascent territory review.{" "}
         {data.status.mode === "demo"
-          ? `Demo data is synthetic (${data.projects.length} projects) — not licensed Dodge content.`
+          ? `Territory sample board (${data.projects.length} projects) for process review.`
           : `Live fetch ${new Date(data.fetchedAt).toLocaleString()}.`}{" "}
         Dismissed ids stored locally as{" "}
         <code className="rounded bg-[var(--color-bg-subtle)] px-1">ascent-dodge-dismissed-v1</code>.
@@ -449,9 +465,6 @@ function ProjectRow({
         <p className="font-medium leading-snug">{p.title}</p>
         <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
           {p.city}, {p.state}
-          {p.source === "demo" && (
-            <span className="ml-1.5 text-[var(--color-fg-subtle)]">· demo</span>
-          )}
         </p>
         {p.trades.length > 0 && (
           <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">{p.trades.slice(0, 4).join(" · ")}</p>
