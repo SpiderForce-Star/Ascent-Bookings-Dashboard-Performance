@@ -21,7 +21,7 @@ Seven review tabs:
 
 1. **Performance** — KPI cards (revenue, YoY growth, volume churn, gross margin), date-range filters, trend charts, monthly + segment breakdown tables. **Real bookings history only** (from the quarterly workbook).
 2. **Market feeds** — **Live** national construction indicators from FRED and BLS, composite commercial index, MoM/YoY moves, history charts. Offline cache fallback if APIs are unreachable.
-3. **Dodge pipeline** — Project-level commercial opportunities via the **Dodge Construction Network REST API** (OAuth 2.0). Defaults to **PEMB focus** (industrial / warehouse / manufacturing / self-storage / ag metal building work) with **CSI Division 13** labeling. Demo SE pipeline when credentials are not configured.
+3. **Dodge pipeline** — Project-level commercial opportunities via the **Dodge Construction Network REST API** (OAuth 2.0). Defaults to **PEMB focus** (industrial / warehouse / manufacturing / self-storage / ag metal building work) with **CSI Division 13** labeling. Demo SE pipeline when credentials are not configured. Includes **Market intelligence** — construction / industrial investment news (`GET /api/market-news`) with live NewsData/Currents (optional keys), RSS fallback, and curated offline samples for VP Sales / field.
 4. **Sales forecast** — H2 2026 / FY 2027 planning model with Conservative / Base / Optimistic scenarios, plus:
    - Forecast by **region** (core / primary / extended) and optionally by **state** (allocated with demand × pipeline weights — **illustrative**, not booked revenue by state)
    - **PEMB-only** vs total commercial
@@ -146,6 +146,17 @@ DODGE_CLIENT_SECRET=...
 | --- | --- |
 | `GET /api/dodge/projects` | Territory-filtered projects (maxMiles, minValuation query params) |
 | `GET /api/construction-feeds` | FRED + BLS national market series |
+| `GET /api/market-news` | Construction / industrial investment headlines (NewsData/Currents/NewsAPI → RSS → curated demo). Cache ~10 min. `?refresh=1` bypasses cache. |
+
+### Market news keys (optional)
+
+Server-only env vars (see `.env.example` and [docs/VERCEL_ENV.md](./docs/VERCEL_ENV.md)):
+
+1. Free [NewsData.io](https://newsdata.io/) key → set `NEWSDATA_API_KEY` (or `NEWS_API_KEY`)
+2. Or [Currents API](https://currentsapi.services/) → `CURRENTS_API_KEY`
+3. Or NewsAPI.org paid key for production → `NEWSAPI_API_KEY` (free tier is often **localhost-only**)
+
+Redeploy on Vercel after adding a key. With **zero keys**, the Dodge tab still shows curated offline intel.
 
 Without Dodge credentials, `/api/dodge/projects` returns a **demo** pipeline sized to the Portland, TN ~600-mile commercial footprint (labeled demo — not licensed Dodge content), with **2–5 PEMB opportunities per state** available on Sales sheets.
 

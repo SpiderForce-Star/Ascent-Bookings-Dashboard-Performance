@@ -13,6 +13,7 @@ import {
   type ProductLine,
 } from "@/data/dodge";
 import { useDodgeProjects } from "@/hooks/use-dodge-projects";
+import { MarketNewsSection } from "@/components/dashboard/market-news-section";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   Building2,
@@ -305,7 +306,12 @@ export function DodgePanel() {
         </Card>
       )}
 
-      <p className="text-[11px] text-[var(--color-fg-subtle)]">
+      {/* Market intelligence — construction / industrial investment news (excluded from print) */}
+      <div className="border-t border-[var(--color-border)] pt-6">
+        <MarketNewsSection />
+      </div>
+
+      <p className="text-[11px] text-[var(--color-fg-subtle)] print:hidden">
         Dodge Construction Network API · REST + OAuth 2.0 · Projects, companies/contacts, and documents.{" "}
         {data.status.mode === "demo"
           ? "Demo data is synthetic for product review — not licensed Dodge content."

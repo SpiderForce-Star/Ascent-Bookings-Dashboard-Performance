@@ -75,6 +75,24 @@ Without these, the **Dodge pipeline** tab shows the labeled **demo** SE pipeline
 
 FRED + BLS market feeds need **no** API keys.
 
+### Market news (construction / industrial investment)
+
+Shown on the **Dodge pipeline** tab under **Market intelligence**. Keys are **server-only** (never `VITE_*`).
+
+| Name | Value | When |
+| --- | --- | --- |
+| `NEWSDATA_API_KEY` | from [newsdata.io](https://newsdata.io/) | **Preferred** free tier for production |
+| `NEWS_API_KEY` | same as NewsData key | Alias for `NEWSDATA_API_KEY` |
+| `CURRENTS_API_KEY` | from [currentsapi.services](https://currentsapi.services/) | Alternative free/paid API |
+| `NEWSAPI_API_KEY` | from [newsapi.org](https://newsapi.org/) | Optional; **free = often localhost only** — needs paid plan on Vercel |
+| `NEWS_API_PROVIDER` | `newsdata` \| `currents` \| `newsapi` \| `auto` | Optional preference |
+
+**Cascade:** configured live provider → public industry RSS → curated offline sample (always works).
+
+**Cache:** ~10 minutes in-memory per server instance to respect free-tier rate limits. Refresh button forces a re-fetch.
+
+Without any news key, the UI still shows **12 curated SE / industrial / warehouse** items labeled demo — fine for exec review.
+
 ---
 
 ## Copy-paste checklist (minimum)
