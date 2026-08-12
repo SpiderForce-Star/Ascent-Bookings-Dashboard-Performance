@@ -218,6 +218,8 @@ DNS for `ascentbuildings.com` is on **GoDaddy**. Full walkthrough (Vercel + GoDa
 
 Leave apex/`www` alone so the marketing site at [ascentbuildings.com](https://ascentbuildings.com) is unchanged.
 
+Vercel **Deployment Protection → Require Log In = OFF** for public executive access. The app does not wait on the custom domain — `*.vercel.app` works until DNS is Valid.
+
 ## Progressive Web App (install)
 
 The dashboard is installable as a full-screen app with **Ascent Money Icon** branding.

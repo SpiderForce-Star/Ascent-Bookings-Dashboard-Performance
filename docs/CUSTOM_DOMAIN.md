@@ -96,6 +96,15 @@ SITE_URL=https://dashboard.ascentbuildings.com
 
 Redeploy once after env changes (**Deployments → … → Redeploy**).
 
+### Deployment Protection (required for exec access)
+
+Vercel → **Project → Settings → Deployment Protection**:
+
+- **Require Log In** = **OFF** (or Standard Protection disabled) so leadership can open the dashboard without a Vercel account.
+- Do **not** block deploys waiting on DNS. `*.vercel.app` stays the working URL until the custom domain shows **Valid**.
+
+The app does not require `dashboard.ascentbuildings.com` to be live.
+
 ---
 
 ## CLI (if you have a Vercel token)

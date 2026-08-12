@@ -22,6 +22,7 @@ import {
   FilterX,
   Loader2,
   MapPin,
+  Printer,
   Radio,
   RefreshCw,
   RotateCcw,
@@ -51,6 +52,15 @@ const DEFAULT_PRODUCT: ProductFilter = "all";
 const DEFAULT_STAGE = "all";
 const DEFAULT_SORT: "valuation" | "miles" | "bid" = "valuation";
 
+function isBidWithinDays(iso: string | null, days: number): boolean {
+  if (!iso) return false;
+  const t = new Date(`${iso}T12:00:00`).getTime();
+  if (!Number.isFinite(t)) return false;
+  const now = Date.now();
+  const horizon = now + days * 86_400_000;
+  return t >= now - 86_400_000 && t <= horizon;
+}
+
 export function DodgePanel() {
   const { data, loading, error, refresh } = useDodgeProjects(true);
   const { dismissedIds, dismissedCount, dismiss, restore, restoreAll, resetDismissed, isDismissed } =
@@ -59,6 +69,8 @@ export function DodgePanel() {
   const [productFilter, setProductFilter] = useState<ProductFilter>(DEFAULT_PRODUCT);
   const [sort, setSort] = useState<"valuation" | "miles" | "bid">(DEFAULT_SORT);
   const [boardTab, setBoardTab] = useState<BoardTab>("active");
+  const [top10, setTop10] = useState(false);
+  const [bid30, setBid30] = useState(false);
 
   const activeSource = useMemo(
     () => data.projects.filter((p) => !isDismissed(p.id)),
@@ -82,6 +94,9 @@ export function DodgePanel() {
     if (stageFilter !== "all") {
       list = list.filter((p) => p.stage === stageFilter);
     }
+    if (bid30) {
+      list = list.filter((p) => isBidWithinDays(p.bidDate, 30));
+    }
     list.sort((a, b) => {
       if (sort === "miles") return a.milesFromPlant - b.milesFromPlant;
       if (sort === "bid") {
@@ -91,8 +106,12 @@ export function DodgePanel() {
       }
       return b.valuation - a.valuation;
     });
+    if (top10 && boardTab === "active") {
+      const byValue = [...list].sort((a, b) => b.valuation - a.valuation);
+      list = byValue.slice(0, 10);
+    }
     return list;
-  }, [boardSource, stageFilter, productFilter, sort]);
+  }, [boardSource, stageFilter, productFilter, sort, bid30, top10, boardTab]);
 
   /** KPIs always reflect Active board only (honest VP summary). */
   const activeKpis = useMemo(() => {
@@ -121,12 +140,23 @@ export function DodgePanel() {
   const activeCount = activeSource.length;
   const allDismissed = data.projects.length > 0 && activeCount === 0;
   const filtersActive =
-    stageFilter !== DEFAULT_STAGE || sort !== DEFAULT_SORT || productFilter !== DEFAULT_PRODUCT;
+    stageFilter !== DEFAULT_STAGE ||
+    sort !== DEFAULT_SORT ||
+    productFilter !== DEFAULT_PRODUCT ||
+    top10 ||
+    bid30;
 
   function clearFilters() {
     setStageFilter(DEFAULT_STAGE);
     setSort(DEFAULT_SORT);
     setProductFilter(DEFAULT_PRODUCT);
+    setTop10(false);
+    setBid30(false);
+  }
+
+  function printActiveList() {
+    setBoardTab("active");
+    window.setTimeout(() => window.print(), 50);
   }
 
   function handleResetDismissed() {
@@ -162,7 +192,7 @@ export function DodgePanel() {
             : "filters";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print:space-y-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-[var(--color-primary)]">
@@ -173,18 +203,22 @@ export function DodgePanel() {
             Opportunities
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
-            SE PEMB / CSI Division 13 pursuit board for the Portland, TN ~600-mile footprint — industrial,
-            warehouse, manufacturing, ag, and self-storage shells.{" "}
+            Territory pursuit board for the Portland, TN ~600-mile PEMB / CSI Division 13 footprint —
+            industrial, warehouse, manufacturing, ag, and self-storage shells.{" "}
             <strong className="font-medium text-[var(--color-fg)]">
-              Dismiss stale jobs, restore from Removed, filter by product and stage.
+              Not a live Dodge Construction Network feed. Dismiss, restore, and print the Active list.
             </strong>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isLive ? "success" : "secondary"} className="gap-1">
             <Radio className="size-3" />
-            {isLive ? "Dodge live" : "Territory board"}
+            {isLive ? "Dodge live" : "Territory pipeline"}
           </Badge>
+          <Button type="button" size="sm" variant="secondary" onClick={printActiveList} className="print:hidden">
+            <Printer className="size-3.5" />
+            Print Active
+          </Button>
           <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
             {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             Refresh
@@ -192,7 +226,7 @@ export function DodgePanel() {
         </div>
       </div>
 
-      <Card className={cn(liveFailed && "border-[var(--color-warn)]/40")}>
+      <Card className={cn("print:hidden", liveFailed && "border-[var(--color-warn)]/40")}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] text-[var(--color-primary)]">
@@ -217,7 +251,7 @@ export function DodgePanel() {
           </div>
           <Badge variant={isLive ? "success" : "secondary"} className="h-7 shrink-0 gap-1 self-start">
             <Radio className="size-3" />
-            {isLive ? "Live" : "Territory board"}
+            {isLive ? "Live" : "Territory pipeline"}
           </Badge>
         </CardContent>
       </Card>
@@ -234,7 +268,7 @@ export function DodgePanel() {
       )}
 
       {/* Active-only KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 print:grid-cols-5">
         <Stat label="Active projects" value={String(activeKpis.count)} />
         <Stat label="Active pipeline $" value={formatCurrency(activeKpis.totalValuation, true)} />
         <Stat label="Out for bid (active)" value={String(activeKpis.biddingCount)} accent />
@@ -252,7 +286,7 @@ export function DodgePanel() {
         )}
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
         <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Product</span>
         {(
           [
@@ -274,6 +308,24 @@ export function DodgePanel() {
             {label}
           </Button>
         ))}
+        <Button
+          type="button"
+          size="sm"
+          variant={top10 ? "default" : "secondary"}
+          className="h-8 rounded-full"
+          onClick={() => setTop10((v) => !v)}
+        >
+          Top 10
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={bid30 ? "default" : "secondary"}
+          className="h-8 rounded-full"
+          onClick={() => setBid30((v) => !v)}
+        >
+          Bid next 30d
+        </Button>
         {filtersActive && (
           <Button
             type="button"
@@ -288,7 +340,7 @@ export function DodgePanel() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
         <span className="text-xs font-medium text-[var(--color-fg-subtle)]">Stage</span>
         {["all", "bidding", "design", "planning", "preconstruction", "construction"].map((s) => (
           <Button
@@ -323,7 +375,7 @@ export function DodgePanel() {
         ))}
       </div>
 
-      <p className="text-[11px] text-[var(--color-fg-muted)]">
+      <p className="text-[11px] text-[var(--color-fg-muted)] print:hidden">
         <strong className="font-medium text-[var(--color-fg)]">PEMB focus</strong> includes{" "}
         {PEMB_BUILDING_TYPES.map((t) => BUILDING_LABEL[t]).join(", ")} plus projects tagged PEMB / Div 13.
         Default view is All lines so the Active board stays populated.
@@ -339,7 +391,7 @@ export function DodgePanel() {
               </CardTitle>
               <CardDescription>
                 {boardTab === "active"
-                  ? `${projects.length} shown · ${activeCount} active · min ${formatCurrency(data.filters.minValuation, true)}`
+                  ? `${projects.length} shown${top10 ? " · Top 10 by value" : ""}${bid30 ? " · bid ≤30d" : ""} · ${activeCount} active · min ${formatCurrency(data.filters.minValuation, true)}`
                   : `${projects.length} shown · Removed board · restore anytime`}
               </CardDescription>
             </div>
@@ -444,7 +496,7 @@ export function DodgePanel() {
       </Card>
 
       {data.companies.length > 0 && (
-        <Card>
+        <Card className="print:hidden">
           <CardHeader>
             <CardTitle>Related firms</CardTitle>
             <CardDescription>Architects, GCs, and owners from the pipeline sample</CardDescription>
@@ -467,7 +519,7 @@ export function DodgePanel() {
         </Card>
       )}
 
-      <div className="border-t border-[var(--color-border)] pt-6">
+      <div className="border-t border-[var(--color-border)] pt-6 print:hidden">
         <MarketNewsSection />
       </div>
 

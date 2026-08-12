@@ -1,4 +1,5 @@
-import { CalendarRange } from "lucide-react";
+import { useState } from "react";
+import { CalendarRange, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -7,7 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MONTHS, PRESETS, type DatePreset, type DateRange } from "@/data/bookings";
+import {
+  MONTHS,
+  MORE_PRESET_IDS,
+  PRESETS,
+  PRIMARY_PRESET_IDS,
+  type DatePreset,
+  type DateRange,
+} from "@/data/bookings";
 import { cn } from "@/lib/utils";
 
 interface DateFiltersProps {
@@ -19,8 +27,23 @@ interface DateFiltersProps {
 
 const YEARS = [2023, 2024, 2025, 2026];
 
+function byIds(ids: DatePreset[]) {
+  return ids
+    .map((id) => PRESETS.find((p) => p.id === id))
+    .filter((p): p is (typeof PRESETS)[number] => Boolean(p));
+}
+
 export function DateFilters({ preset, range, onPresetChange, onRangeChange }: DateFiltersProps) {
-  const quickPresets = PRESETS.filter((p) => p.id !== "custom");
+  const primary = byIds(PRIMARY_PRESET_IDS);
+  const more = byIds(MORE_PRESET_IDS);
+  const moreActive = MORE_PRESET_IDS.includes(preset);
+  const [showMore, setShowMore] = useState(moreActive);
+
+  function applyPreset(id: DatePreset, nextRange: DateRange | null) {
+    if (!nextRange) return;
+    onPresetChange(id);
+    onRangeChange(nextRange);
+  }
 
   return (
     <div className="flex flex-col gap-3 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 shadow-[var(--shadow-sm)] sm:p-5">
@@ -30,7 +53,7 @@ export function DateFilters({ preset, range, onPresetChange, onRangeChange }: Da
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {quickPresets.map((p) => (
+        {primary.map((p) => (
           <Button
             key={p.id}
             type="button"
@@ -40,17 +63,46 @@ export function DateFilters({ preset, range, onPresetChange, onRangeChange }: Da
               "h-8 rounded-full px-3",
               preset === p.id ? "" : "bg-[var(--color-bg-subtle)] border-transparent",
             )}
-            onClick={() => {
-              if (p.range) {
-                onPresetChange(p.id);
-                onRangeChange(p.range);
-              }
-            }}
+            onClick={() => applyPreset(p.id, p.range)}
           >
             {p.label}
           </Button>
         ))}
+        <Button
+          type="button"
+          size="sm"
+          variant={showMore || moreActive ? "secondary" : "ghost"}
+          className="h-8 rounded-full px-3"
+          onClick={() => setShowMore((v) => !v)}
+          aria-expanded={showMore}
+        >
+          More
+          <ChevronDown className={cn("size-3.5 transition-transform", showMore && "rotate-180")} />
+        </Button>
       </div>
+
+      {showMore && (
+        <div className="flex flex-wrap gap-2 border-t border-[var(--color-border)] pt-3">
+          <span className="self-center text-[11px] font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">
+            More
+          </span>
+          {more.map((p) => (
+            <Button
+              key={p.id}
+              type="button"
+              size="sm"
+              variant={preset === p.id ? "default" : "secondary"}
+              className={cn(
+                "h-8 rounded-full px-3",
+                preset === p.id ? "" : "bg-[var(--color-bg-subtle)] border-transparent",
+              )}
+              onClick={() => applyPreset(p.id, p.range)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Start year">

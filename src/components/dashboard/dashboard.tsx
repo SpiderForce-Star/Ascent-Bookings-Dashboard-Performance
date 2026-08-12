@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import type { DashboardMetrics } from "@/data/bookings";
 
 const defaultPreset = PRESETS.find((p) => p.id === "ytd-2026")!;
 const defaultRange = defaultPreset.range!;
@@ -189,6 +190,7 @@ export function Dashboard() {
               />
 
               <KpiCards metrics={metrics} />
+              <BoardBriefStrip metrics={metrics} feedsLive={feeds.live} composite={feeds.signal.compositeIndex} />
               <TrendCharts data={series} />
               <BreakdownTable rows={segments} monthlyRows={series} />
             </>
@@ -213,5 +215,78 @@ export function Dashboard() {
         </main>
       </div>
     </TooltipProvider>
+  );
+}
+
+function BoardBriefStrip({
+  metrics,
+  feedsLive,
+  composite,
+}: {
+  metrics: DashboardMetrics;
+  feedsLive: boolean;
+  composite: number;
+}) {
+  const priorGm = metrics.priorMonths.reduce((s, r) => s + r.gm, 0);
+  const priorGmPct = metrics.priorRevenue > 0 ? priorGm / metrics.priorRevenue : 0;
+  const gmDeltaPts = (metrics.gmPct - priorGmPct) * 100;
+  const yoyUp = metrics.growth >= 0;
+  const gmVsBook = metrics.gmPct - 0.25;
+
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 print:hidden">
+      <BriefCell
+        label="Sales vs last year"
+        value={`${yoyUp ? "Up" : "Down"} ${(Math.abs(metrics.growth) * 100).toFixed(1)}%`}
+        note="Same months, prior year"
+        tone={yoyUp ? "up" : "down"}
+      />
+      <BriefCell
+        label="GM rate"
+        value={`${(metrics.gmPct * 100).toFixed(1)}%`}
+        note={
+          metrics.priorRevenue > 0
+            ? `${gmDeltaPts >= 0 ? "+" : ""}${gmDeltaPts.toFixed(1)} pts vs LY · ~25% book ${gmVsBook >= 0 ? "+" : ""}${(gmVsBook * 100).toFixed(1)} pts`
+            : `vs ~25% book ${gmVsBook >= 0 ? "+" : ""}${(gmVsBook * 100).toFixed(1)} pts`
+        }
+        tone={gmDeltaPts >= 0 ? "up" : "down"}
+      />
+      <BriefCell
+        label="Market feeds"
+        value={feedsLive ? `Live · ${composite.toFixed(0)}` : `Cached · ${composite.toFixed(0)}`}
+        note={feedsLive ? "FRED/BLS composite (100 = neutral)" : "Offline snapshot · composite 100 = neutral"}
+        tone={feedsLive ? "live" : "muted"}
+      />
+    </div>
+  );
+}
+
+function BriefCell({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone: "up" | "down" | "live" | "muted";
+}) {
+  return (
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 text-sm font-semibold tabular",
+          tone === "up" && "text-[var(--color-success)]",
+          tone === "down" && "text-[var(--color-danger)]",
+          tone === "live" && "text-[var(--color-fg)]",
+          tone === "muted" && "text-[var(--color-fg-muted)]",
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">{note}</p>
+    </div>
   );
 }

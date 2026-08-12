@@ -481,16 +481,7 @@ export const PRESETS: { id: DatePreset; label: string; range: DateRange | null }
     range: { startYear: 2026, startMonth: 6, endYear: 2026, endMonth: 6 },
   },
   { id: "q2-2026", label: "Q2 2026", range: { startYear: 2026, startMonth: 3, endYear: 2026, endMonth: 5 } },
-  {
-    id: "q3-2026",
-    label: "Q3 2026 (Jul)",
-    range: { startYear: 2026, startMonth: 6, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
-  },
-  { id: "q1-2026", label: "Q1 2026", range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: 2 } },
   { id: "h1-2026", label: "H1 2026", range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: 5 } },
-  { id: "full-2025", label: "FY 2025", range: { startYear: 2025, startMonth: 0, endYear: 2025, endMonth: 11 } },
-  { id: "full-2024", label: "FY 2024", range: { startYear: 2024, startMonth: 0, endYear: 2024, endMonth: 11 } },
-  { id: "full-2023", label: "FY 2023", range: { startYear: 2023, startMonth: 0, endYear: 2023, endMonth: 11 } },
   {
     id: "trailing-12",
     label: "Trailing 12",
@@ -502,8 +493,30 @@ export const PRESETS: { id: DatePreset; label: string; range: DateRange | null }
     label: "All data",
     range: { startYear: 2023, startMonth: 0, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
   },
+  {
+    id: "q3-2026",
+    label: "Q3 2026 (Jul)",
+    range: { startYear: 2026, startMonth: 6, endYear: 2026, endMonth: LATEST_ACTUAL_2026_MONTH },
+  },
+  { id: "q1-2026", label: "Q1 2026", range: { startYear: 2026, startMonth: 0, endYear: 2026, endMonth: 2 } },
+  { id: "full-2025", label: "FY 2025", range: { startYear: 2025, startMonth: 0, endYear: 2025, endMonth: 11 } },
+  { id: "full-2024", label: "FY 2024", range: { startYear: 2024, startMonth: 0, endYear: 2024, endMonth: 11 } },
+  { id: "full-2023", label: "FY 2023", range: { startYear: 2023, startMonth: 0, endYear: 2023, endMonth: 11 } },
   { id: "custom", label: "Custom", range: null },
 ];
+
+/** Primary chips on the Performance filter bar. */
+export const PRIMARY_PRESET_IDS: DatePreset[] = [
+  "ytd-2026",
+  "jul-2026",
+  "q2-2026",
+  "h1-2026",
+  "trailing-12",
+  "all",
+];
+
+/** Older FY / extra quarter chips — shown behind More. */
+export const MORE_PRESET_IDS: DatePreset[] = ["q3-2026", "q1-2026", "full-2025", "full-2024", "full-2023"];
 
 function toOrdinal(year: number, month: number): number {
   return year * 12 + month;
