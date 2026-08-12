@@ -62,16 +62,21 @@ For **corporate review now**, keep auth **off** (`VITE_AUTH_ENABLED=false`) and 
 
 ### Dodge Construction Network (live project pipeline)
 
+Server-only REST + OAuth. **Do not** use website login credentials or `VITE_*` prefixes.
+
 | Name | Value |
 | --- | --- |
-| `DODGE_API_BASE_URL` | URL Dodge issues (example shape: `https://api.construction.com/v1`) |
-| `DODGE_CLIENT_ID` | from Dodge |
-| `DODGE_CLIENT_SECRET` | from Dodge |
-| `DODGE_TOKEN_URL` | optional override |
-| `DODGE_ACCESS_TOKEN` | optional bearer instead of client credentials |
+| `DODGE_API_BASE_URL` | URL Dodge issues (example: `https://api.construction.com/v1`) — **required for live** |
+| `DODGE_CLIENT_ID` | OAuth client id from Dodge |
+| `DODGE_CLIENT_SECRET` | OAuth client secret from Dodge |
+| `DODGE_TOKEN_URL` | optional token endpoint (default `{base}/oauth/token`) |
+| `DODGE_ACCESS_TOKEN` | optional long-lived bearer (skips client_credentials) |
 | `DODGE_API_KEY` | optional static key some tenants use |
 
-Without these, the **Dodge pipeline** tab shows the labeled **demo** SE pipeline (works offline for review).
+**Live when:** `DODGE_API_BASE_URL` + (`CLIENT_ID`/`CLIENT_SECRET` **or** `ACCESS_TOKEN` **or** `API_KEY`).  
+**Otherwise / on API error:** labeled **demo** SE pipeline (24 synthetic jobs). Badge shows **Live** vs **Demo**.  
+Live responses are cached ~3 minutes in-memory; UI **Refresh** forces re-fetch.  
+Active/Removed dismiss list (localStorage) works with both live and demo project ids.
 
 FRED + BLS market feeds need **no** API keys.
 

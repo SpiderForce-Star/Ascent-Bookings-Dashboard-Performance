@@ -32,37 +32,69 @@ export function useDodgeProjects(auto = true) {
   const [loading, setLoading] = useState(auto);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/dodge/projects?maxMiles=600&minValuation=1000000", {
+      const q = new URLSearchParams({
+        maxMiles: "600",
+        minValuation: "1000000",
+      });
+      if (force) q.set("refresh", "1");
+      const res = await fetch(`/api/dodge/projects?${q}`, {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as DodgeProjectsResponse;
+      // Route always returns a board shape; if not, fall back to demo
+      if (!json?.projects || !Array.isArray(json.projects)) {
+        throw new Error("Invalid Dodge response shape");
+      }
       setData(json);
       return json;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setData((prev) => ({
-        ...prev,
+      setData({
+        fetchedAt: new Date().toISOString(),
         status: {
-          ...prev.status,
-          message: "Could not reach Dodge API route — using local demo pipeline.",
+          configured: false,
           mode: "demo",
+          message: "Could not reach Dodge API route — using local demo pipeline.",
+          baseUrl: null,
+          hasClientId: false,
+          hasClientSecret: false,
+          hasAccessToken: false,
         },
-      }));
+        projects: DEMO_DODGE_PROJECTS,
+        companies: DEMO_DODGE_COMPANIES,
+        summary: summarizeProjects(DEMO_DODGE_PROJECTS, 600),
+        filters: {
+          states: [],
+          maxMiles: 600,
+          minValuation: 1_000_000,
+        },
+      });
       return null;
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const load = useCallback(() => refresh(false), [refresh]);
+  const hardRefresh = useCallback(() => refresh(true), [refresh]);
+
   useEffect(() => {
     if (!auto) return;
-    void refresh();
-  }, [auto, refresh]);
+    void load();
+  }, [auto, load]);
 
-  return { data, loading, error, refresh };
+  return {
+    data,
+    loading,
+    error,
+    /** Force bypass of server live cache */
+    refresh: hardRefresh,
+    /** Soft load may use warm server cache */
+    load,
+  };
 }
