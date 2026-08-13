@@ -83,13 +83,15 @@ export function Dashboard() {
         <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]/90 backdrop-blur-md">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
-              <img
-                src="/logo.jpg"
-                alt="Ascent Buildings"
-                className="h-10 w-auto shrink-0 object-contain sm:h-11"
-                width={160}
-                height={44}
-              />
+              <div className="ascent-logo-stage shrink-0">
+                <img
+                  src="/logo.jpg"
+                  alt="Ascent Buildings"
+                  className="ascent-logo-spin h-12 w-auto object-contain sm:h-14"
+                  width={200}
+                  height={56}
+                />
+              </div>
               <div className="hidden min-w-0 border-l border-[var(--color-border)] pl-3 sm:block">
                 <p className="font-display text-sm font-semibold tracking-tight text-[var(--color-fg)]">
                   Bookings performance
@@ -212,7 +214,7 @@ export function Dashboard() {
           <footer className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-6 pb-8 text-xs text-[var(--color-fg-subtle)] sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-0.5">
               <p>Ascent Buildings LLC · Portland, TN · PEMB / CSI Div 13 · Bookings through July 2026</p>
-              <p>Created by Chris Woodmore · Release 8-12-2026</p>
+              <p>Created by Chris Woodmore & Ascent AI program · Release 8-13-2026</p>
             </div>
             <p className="print:hidden">
               FRED + BLS live · Territory opportunity board · Sales & steel forecasts are planning models
