@@ -19,32 +19,39 @@ const FRED_SERIES: {
   relevance: FeedSeries["relevance"];
 }[] = [
   {
+    id: "PRMFGCONS",
+    label: "Manufacturing construction",
+    unit: "$ millions SAAR",
+    description: "Private manufacturing construction put in place (FRED PRMFGCONS) — plants and factory work",
+    relevance: "high",
+  },
+  {
+    id: "TLCOMCONS",
+    label: "Commercial construction",
+    unit: "$ millions SAAR",
+    description: "Commercial construction put in place (FRED TLCOMCONS) — retail, warehouse, distribution",
+    relevance: "high",
+  },
+  {
     id: "TLNRESCONS",
-    label: "Private nonresidential construction",
+    label: "Private nonresidential (all)",
     unit: "$ millions SAAR",
     description: "Total private nonresidential construction put in place (FRED TLNRESCONS)",
     relevance: "high",
   },
   {
-    id: "PNRESCONS",
-    label: "Private nonresidential (detail)",
-    unit: "$ millions SAAR",
-    description: "Private nonresidential construction spending (FRED PNRESCONS)",
+    id: "USCONS",
+    label: "Construction employment",
+    unit: "thousands",
+    description: "All employees, construction (FRED USCONS / CES)",
     relevance: "high",
   },
   {
-    id: "TTLCONS",
-    label: "Total construction spending",
-    unit: "$ millions SAAR",
-    description: "Total construction put in place (FRED TTLCONS)",
-    relevance: "medium",
-  },
-  {
-    id: "PERMIT",
-    label: "Building permits",
-    unit: "thousands SAAR",
-    description: "New private housing units authorized (FRED PERMIT)",
-    relevance: "context",
+    id: "WPU101",
+    label: "Iron and steel PPI",
+    unit: "index",
+    description: "Producer price index — iron and steel (FRED WPU101)",
+    relevance: "high",
   },
 ];
 
@@ -56,24 +63,10 @@ const BLS_SERIES: {
   relevance: FeedSeries["relevance"];
 }[] = [
   {
-    id: "CES2000000001",
-    label: "Construction employment",
-    unit: "thousands",
-    description: "All employees, construction — seasonally adjusted (BLS CES2000000001)",
-    relevance: "high",
-  },
-  {
     id: "PCU236211236211",
     label: "Industrial building PPI",
     unit: "index",
     description: "Producer price index — industrial building construction",
-    relevance: "medium",
-  },
-  {
-    id: "WPU081",
-    label: "Lumber & wood PPI",
-    unit: "index",
-    description: "Producer price index — lumber and wood products",
     relevance: "medium",
   },
 ];
@@ -135,7 +128,7 @@ async function fetchBlsSeries(): Promise<FeedSeries[]> {
   const year = new Date().getUTCFullYear();
   const body = {
     seriesid: BLS_SERIES.map((s) => s.id),
-    startyear: String(year - 2),
+    startyear: String(year - 5),
     endyear: String(year),
   };
   const res = await fetch("https://api.bls.gov/publicAPI/v2/timeseries/data/", {
@@ -192,7 +185,7 @@ async function fetchBlsSeries(): Promise<FeedSeries[]> {
       .filter((d) => Number.isFinite(d.value))
       .sort((a, b) => a.year - b.year || a.month - b.month);
 
-    const history: FeedPoint[] = sorted.slice(-18).map((d) => ({ date: d.date, value: d.value }));
+    const history: FeedPoint[] = sorted.slice(-60).map((d) => ({ date: d.date, value: d.value }));
     const latest = history[history.length - 1] ?? null;
     const prior = history[history.length - 2] ?? null;
     const yoy = history.length >= 13 ? history[history.length - 13]! : null;

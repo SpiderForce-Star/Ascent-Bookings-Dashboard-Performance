@@ -97,12 +97,12 @@ Pipeline opportunities on sales sheets are **demo / illustrative** for handoff â
 
 | Series | Source | Use |
 | --- | --- | --- |
-| `TLNRESCONS` / `PNRESCONS` | FRED | Private nonresidential construction put-in-place |
-| `TTLCONS` | FRED | Total construction spending |
-| `PERMIT` | FRED | Building permits (residential context) |
-| `CES2000000001` | BLS | Construction employment (SA) |
+| `PRMFGCONS` | FRED | Private manufacturing construction (plants / factories) |
+| `TLCOMCONS` | FRED | Commercial construction (warehouse / retail / distribution) |
+| `TLNRESCONS` | FRED | Total private nonresidential put-in-place |
+| `USCONS` | FRED | Construction employment |
+| `WPU101` | FRED | Iron and steel PPI |
 | `PCU236211236211` | BLS | Industrial building construction PPI |
-| `WPU081` | BLS | Lumber & wood products PPI |
 
 **API endpoint (app):** `GET /api/construction-feeds`  
 Refreshes on load and via the **Refresh** control. Results cached ~5 minutes at the edge when deployed.
