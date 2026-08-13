@@ -14,20 +14,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  EGM_FLOOR,
+  KIND_SHORT,
   SHIPMENT_AS_OF,
   SHIPMENT_FORWARD,
   SHIPMENT_NOTES,
   SHIPMENT_SOURCE,
   computeShipmentMetrics,
+  coHygieneReport,
+  egmBandBreakdown,
+  egmBsrHeat,
+  egmRegionHeat,
+  egmStateHeat,
+  filterShipmentJobs,
+  jobCycleDays,
   longCycleJobs,
   lowEgmJobs,
   mixBreakdown,
   shipmentChartSeries,
   topCustomers,
   topStates,
+  type EgmHeatCell,
+  type JobKind,
+  type ShipmentJob,
+  type ShipmentJobFilter,
 } from "@/data/shipments";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
-import { AlertTriangle, Factory, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardList, Factory, Target, Truck, X } from "lucide-react";
 
 function Tip({
   active,
@@ -101,6 +114,7 @@ export function BookedShippedStrip() {
 
 export function ShipmentsPanel() {
   const [view, setView] = useState<View>("overview");
+  const [filter, setFilter] = useState<ShipmentJobFilter | null>(null);
   const m = useMemo(() => computeShipmentMetrics(), []);
   const series = useMemo(() => shipmentChartSeries(), []);
   const mix = useMemo(() => mixBreakdown(), []);
@@ -108,7 +122,27 @@ export function ShipmentsPanel() {
   const states = useMemo(() => topStates(10), []);
   const low = useMemo(() => lowEgmJobs(20, 12), []);
   const long = useMemo(() => longCycleJobs(10), []);
+  const bands = useMemo(() => egmBandBreakdown(), []);
+  const regions = useMemo(() => egmRegionHeat(), []);
+  const heat = useMemo(() => egmStateHeat(), []);
+  const bsrs = useMemo(() => egmBsrHeat(), []);
+  const hygiene = useMemo(() => coHygieneReport(10), []);
+  const filteredJobs = useMemo(() => (filter ? filterShipmentJobs(filter, 40) : []), [filter]);
+  const filteredTotal = useMemo(() => {
+    if (!filter) return { count: 0, revenue: 0 };
+    const all = filterShipmentJobs(filter);
+    return { count: all.length, revenue: all.reduce((s, j) => s + j.revenue, 0) };
+  }, [filter]);
   const calendar = SHIPMENT_FORWARD.filter((f) => f.monthIndex >= 7);
+
+  function openJobs(next: ShipmentJobFilter) {
+    setFilter(next);
+    setView("jobs");
+  }
+
+  function clearFilter() {
+    setFilter(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -130,6 +164,7 @@ export function ShipmentsPanel() {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">As of {SHIPMENT_AS_OF}</Badge>
           <Badge variant="outline">Closed through July</Badge>
+          <Badge variant="outline">25% EGM floor</Badge>
         </div>
       </div>
 
@@ -161,7 +196,19 @@ export function ShipmentsPanel() {
         shipped {formatPercent(m.growth)}. Source: {SHIPMENT_SOURCE}.
       </p>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+        <EgmControlTower
+          bands={bands}
+          regions={regions}
+          heat={heat}
+          bsrs={bsrs}
+          filter={filter}
+          onOpen={openJobs}
+        />
+        <CoHygieneTile hygiene={hygiene} active={!!filter?.hygiene} onOpen={() => openJobs({ hygiene: true })} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
         {(
           [
             ["overview", "Overview"],
@@ -179,6 +226,12 @@ export function ShipmentsPanel() {
             {label}
           </Button>
         ))}
+        {filter && (
+          <Button type="button" size="sm" variant="outline" className="h-8 rounded-full" onClick={clearFilter}>
+            <X className="size-3.5" />
+            {filterLabel(filter)} · {filteredTotal.count} jobs · {formatCurrency(filteredTotal.revenue, true)}
+          </Button>
+        )}
       </div>
 
       {view === "overview" && (
@@ -326,7 +379,28 @@ export function ShipmentsPanel() {
         </>
       )}
 
-      {view === "jobs" && (
+      {view === "jobs" && filter && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Target className="size-4 text-[var(--color-primary)]" />
+              {filterLabel(filter)}
+            </CardTitle>
+            <CardDescription>
+              {filteredTotal.count} closed-month jobs · {formatCurrency(filteredTotal.revenue, true)} shipped.
+              {filteredJobs.length < filteredTotal.count
+                ? ` Showing the ${filteredJobs.length} largest.`
+                : ""}{" "}
+              Click a band, state, BSR, or the hygiene tile to change the list.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto pt-0">
+            <JobTable jobs={filteredJobs} showMeta />
+          </CardContent>
+        </Card>
+      )}
+
+      {view === "jobs" && !filter && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
@@ -339,26 +413,7 @@ export function ShipmentsPanel() {
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto pt-0">
-              <table className="w-full min-w-[480px] text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase text-[var(--color-fg-subtle)]">
-                    <th className="pb-2 pr-2">Job</th>
-                    <th className="pb-2 pr-2">Customer</th>
-                    <th className="pb-2 pr-2 text-right">EGM</th>
-                    <th className="pb-2 text-right">$</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {low.map((j) => (
-                    <tr key={`${j.id}-${j.month}`} className="border-b border-[var(--color-border)]/60">
-                      <td className="py-1.5 pr-2 tabular">{j.id}</td>
-                      <td className="py-1.5 pr-2">{j.customer || "—"}</td>
-                      <td className="py-1.5 pr-2 text-right tabular text-[var(--color-danger)]">{j.egmPct.toFixed(1)}%</td>
-                      <td className="py-1.5 text-right tabular">{formatCurrency(j.revenue, true)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <JobTable jobs={low} />
             </CardContent>
           </Card>
           <Card>
@@ -373,26 +428,7 @@ export function ShipmentsPanel() {
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto pt-0">
-              <table className="w-full min-w-[480px] text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase text-[var(--color-fg-subtle)]">
-                    <th className="pb-2 pr-2">Job</th>
-                    <th className="pb-2 pr-2">Customer</th>
-                    <th className="pb-2 pr-2 text-right">Days</th>
-                    <th className="pb-2 text-right">$</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {long.map((j) => (
-                    <tr key={`${j.id}-${j.month}`} className="border-b border-[var(--color-border)]/60">
-                      <td className="py-1.5 pr-2 tabular">{j.id}</td>
-                      <td className="py-1.5 pr-2">{j.customer || "—"}</td>
-                      <td className="py-1.5 pr-2 text-right tabular">{j.cycleDays}</td>
-                      <td className="py-1.5 text-right tabular">{formatCurrency(j.revenue, true)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <JobTable jobs={long} showDays />
             </CardContent>
           </Card>
         </div>
@@ -422,5 +458,408 @@ function Stat({
         {hint && <p className="mt-0.5 text-[11px] text-[var(--color-fg-muted)]">{hint}</p>}
       </CardContent>
     </Card>
+  );
+}
+
+function filterLabel(filter: ShipmentJobFilter): string {
+  const parts: string[] = [];
+  if (filter.hygiene) parts.push("Unupdated / at risk");
+  if (filter.band === "under20") parts.push("<20% EGM");
+  if (filter.band === "20-25") parts.push("20–25% EGM");
+  if (filter.band === "25-30") parts.push("25–30% EGM");
+  if (filter.band === "30plus") parts.push("30%+ EGM");
+  if (filter.band === "under25") parts.push("Below 25% EGM");
+  if (filter.region === "core-se") parts.push("Core Southeast");
+  if (filter.region === "long-haul") parts.push("Long haul");
+  if (filter.state) parts.push(filter.state);
+  if (filter.kind) parts.push(KIND_SHORT[filter.kind]);
+  if (filter.bsr) parts.push(`BSR ${filter.bsr}`);
+  return parts.join(" · ") || "Filtered jobs";
+}
+
+function sameFilter(a: ShipmentJobFilter | null, b: ShipmentJobFilter): boolean {
+  if (!a) return false;
+  return (
+    a.band === b.band &&
+    a.state === b.state &&
+    a.bsr === b.bsr &&
+    a.kind === b.kind &&
+    a.region === b.region &&
+    a.hygiene === b.hygiene
+  );
+}
+
+function egmTone(pct: number, count: number): "empty" | "danger" | "warn" | "ok" | "strong" {
+  if (count === 0) return "empty";
+  if (pct < 0.2) return "danger";
+  if (pct < EGM_FLOOR / 100) return "warn";
+  if (pct < 0.28) return "ok";
+  return "strong";
+}
+
+function toneClass(tone: ReturnType<typeof egmTone>, selected = false): string {
+  return cn(
+    "rounded-[var(--radius-sm)] transition-colors",
+    selected && "ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-bg-elevated)]",
+    tone === "empty" && "text-[var(--color-fg-subtle)]",
+    tone === "danger" && "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
+    tone === "warn" && "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
+    tone === "ok" && "bg-[var(--color-bg-subtle)] text-[var(--color-fg)]",
+    tone === "strong" && "bg-[var(--color-success-soft)] text-[var(--color-success)]",
+  );
+}
+
+function EgmControlTower({
+  bands,
+  regions,
+  heat,
+  bsrs,
+  filter,
+  onOpen,
+}: {
+  bands: ReturnType<typeof egmBandBreakdown>;
+  regions: EgmHeatCell[];
+  heat: ReturnType<typeof egmStateHeat>;
+  bsrs: EgmHeatCell[];
+  filter: ShipmentJobFilter | null;
+  onOpen: (next: ShipmentJobFilter) => void;
+}) {
+  const leak = bands.find((b) => b.id === "20-25");
+  const kinds: JobKind[] = ["building", "component", "insulation"];
+
+  return (
+    <Card className="xl:col-span-3">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Target className="size-4 text-[var(--color-primary)]" />
+          EGM control tower
+        </CardTitle>
+        <CardDescription>
+          Weighted estimated margin by band, region, state, product, and BSR. Red is below the{" "}
+          {EGM_FLOOR}% floor. Click a cell for the job list.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-0">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {bands.map((b) => {
+            const next: ShipmentJobFilter = { band: b.id };
+            const on = sameFilter(filter, next);
+            const hot = b.id === "under20" || b.id === "20-25";
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onOpen(next)}
+                className={cn(
+                  "rounded-[var(--radius-md)] border px-3 py-2 text-left",
+                  hot
+                    ? "border-[var(--color-danger)]/35 bg-[var(--color-danger-soft)]"
+                    : "border-[var(--color-border)] bg-[var(--color-bg)]",
+                  on && "ring-2 ring-[var(--color-primary)]",
+                )}
+              >
+                <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">
+                  {b.label}
+                </p>
+                <p className="font-display text-lg font-semibold tabular">{formatCurrency(b.revenue, true)}</p>
+                <p className="text-[11px] text-[var(--color-fg-muted)]">
+                  {b.count} jobs · {(b.egmPct * 100).toFixed(1)}%
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        {leak && (
+          <p className="text-[12px] text-[var(--color-fg-muted)]">
+            <span className="font-medium text-[var(--color-danger)]">20–25% is the leak</span> —{" "}
+            {formatCurrency(leak.revenue, true)} across {leak.count} jobs. That is where a VP override
+            belongs, not at 0%.
+          </p>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          {regions.map((r) => {
+            const next: ShipmentJobFilter = { region: r.region };
+            const tone = egmTone(r.egmPct, r.count);
+            return (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => r.region && onOpen(next)}
+                className={cn("px-3 py-2 text-left", toneClass(tone, sameFilter(filter, next)))}
+              >
+                <p className="text-[11px] uppercase tracking-wide opacity-80">{r.label}</p>
+                <p className="font-display text-base font-semibold tabular">{(r.egmPct * 100).toFixed(1)}%</p>
+                <p className="text-[11px] opacity-80">
+                  {formatCurrency(r.revenue, true)} · {r.under25Count} below 25%
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase text-[var(--color-fg-subtle)]">
+                <th className="pb-1.5 pr-2 font-medium">State</th>
+                {kinds.map((k) => (
+                  <th key={k} className="pb-1.5 pr-2 text-right font-medium">
+                    {KIND_SHORT[k]}
+                  </th>
+                ))}
+                <th className="pb-1.5 text-right font-medium">All</th>
+              </tr>
+            </thead>
+            <tbody>
+              {heat.map((row) => (
+                <tr key={row.state} className="border-t border-[var(--color-border)]/50">
+                  <td className="py-1 pr-2 font-medium">{row.state}</td>
+                  {kinds.map((k) => (
+                    <td key={k} className="py-1 pr-2 text-right">
+                      <HeatButton
+                        cell={row.byKind[k]}
+                        selected={sameFilter(filter, { state: row.state === "Other" ? undefined : row.state, kind: k })}
+                        onClick={() => {
+                          if (row.byKind[k].count === 0) return;
+                          onOpen({
+                            ...(row.state !== "Other" ? { state: row.state } : {}),
+                            kind: k,
+                          });
+                        }}
+                      />
+                    </td>
+                  ))}
+                  <td className="py-1 text-right">
+                    <HeatButton
+                      cell={row.total}
+                      selected={sameFilter(filter, { state: row.state === "Other" ? undefined : row.state })}
+                      onClick={() => {
+                        if (row.state === "Other") return;
+                        onOpen({ state: row.state });
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">
+            BSR — ranked by $ below 25%
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {bsrs.map((c) => {
+              const next: ShipmentJobFilter = { bsr: c.bsr };
+              const tone = egmTone(c.egmPct, c.count);
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => c.bsr && onOpen(next)}
+                  className={cn("px-2 py-1 text-left", toneClass(tone, sameFilter(filter, next)))}
+                  title={`${c.label}: ${(c.egmPct * 100).toFixed(1)}% EGM · ${formatCurrency(c.under25Rev, true)} below 25%`}
+                >
+                  <span className="text-xs font-semibold">{c.label}</span>
+                  <span className="ml-1.5 text-[11px] tabular opacity-80">{(c.egmPct * 100).toFixed(1)}%</span>
+                  <span className="ml-1 text-[10px] tabular opacity-70">{formatCurrency(c.under25Rev, true)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-3 py-2 text-[12px] text-[var(--color-fg)]">
+          <span className="font-medium">Board question. </span>
+          Who can book under {EGM_FLOOR}% EGM without a VP override?
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeatButton({
+  cell,
+  selected,
+  onClick,
+}: {
+  cell: EgmHeatCell;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const tone = egmTone(cell.egmPct, cell.count);
+  if (cell.count === 0) {
+    return <span className="text-[11px] text-[var(--color-fg-subtle)]">—</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn("inline-flex min-w-[4.5rem] flex-col items-end px-1.5 py-0.5", toneClass(tone, selected))}
+    >
+      <span className="text-xs font-semibold tabular">{(cell.egmPct * 100).toFixed(1)}%</span>
+      <span className="text-[10px] tabular opacity-80">{formatCurrency(cell.revenue, true)}</span>
+    </button>
+  );
+}
+
+function CoHygieneTile({
+  hygiene,
+  active,
+  onOpen,
+}: {
+  hygiene: ReturnType<typeof coHygieneReport>;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const signals = [
+    {
+      label: "Deferred loss",
+      value: formatCurrency(Math.abs(hygiene.deferredLoss), true),
+      hint: "CO / update leakage at month close",
+      warn: hygiene.deferredLoss < 0,
+    },
+    {
+      label: "Slippage",
+      value: formatCurrency(hygiene.slippage, true),
+      hint: "Start-month $ that did not close",
+      warn: hygiene.slippage > 0,
+    },
+    {
+      label: "Long cycle",
+      value: formatCurrency(hygiene.longCycleRev, true),
+      hint: `${hygiene.longCycleCount} jobs · ERD ≥ 120 days`,
+      warn: hygiene.longCycleCount > 0,
+    },
+    {
+      label: "Low EGM",
+      value: formatCurrency(hygiene.lowEgmRev, true),
+      hint: `${hygiene.lowEgmCount} jobs shipped under 20%`,
+      warn: hygiene.lowEgmCount > 0,
+    },
+  ];
+
+  return (
+    <Card className={cn("xl:col-span-2", active && "ring-2 ring-[var(--color-primary)]")}>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ClipboardList className="size-4 text-[var(--color-warn)]" />
+          Unupdated jobs at risk
+        </CardTitle>
+        <CardDescription>
+          Four signals, one hygiene problem. Files that sat without a job update or a change order.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <button type="button" onClick={onOpen} className="w-full rounded-[var(--radius-md)] border border-[var(--color-warn)]/35 bg-[var(--color-warn-soft)] px-3 py-2.5 text-left">
+          <p className="text-[11px] uppercase tracking-wide text-[var(--color-warn)]">Files to review</p>
+          <p className="font-display text-2xl font-semibold tabular">
+            {hygiene.jobsAtRiskCount}
+            <span className="ml-2 text-base font-medium text-[var(--color-fg-muted)]">
+              {formatCurrency(hygiene.jobsAtRiskRev, true)}
+            </span>
+          </p>
+          <p className="text-[11px] text-[var(--color-fg-muted)]">
+            Low EGM or ERD ≥ 120 days · plus {formatCurrency(hygiene.band20to25Rev, true)} still sitting in
+            20–25%
+          </p>
+        </button>
+
+        <div className="grid grid-cols-2 gap-2">
+          {signals.map((s) => (
+            <div
+              key={s.label}
+              className={cn(
+                "rounded-[var(--radius-md)] border px-2.5 py-2",
+                s.warn ? "border-[var(--color-warn)]/30" : "border-[var(--color-border)]",
+              )}
+            >
+              <p className="text-[11px] text-[var(--color-fg-subtle)]">{s.label}</p>
+              <p className="font-display text-base font-semibold tabular">{s.value}</p>
+              <p className="text-[10px] leading-snug text-[var(--color-fg-muted)]">{s.hint}</p>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">
+            Highest-risk files
+          </p>
+          <table className="w-full text-sm">
+            <tbody>
+              {hygiene.jobs.slice(0, 8).map((j) => (
+                <tr key={`${j.id}-${j.month}`} className="border-b border-[var(--color-border)]/50">
+                  <td className="py-1 pr-2 tabular">{j.id}</td>
+                  <td className="py-1 pr-2 truncate max-w-[8rem]">{j.customer || "—"}</td>
+                  <td className="py-1 pr-2 text-right tabular text-[var(--color-danger)]">{j.egmPct.toFixed(1)}%</td>
+                  <td className="py-1 text-right tabular">{formatCurrency(j.revenue, true)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <Button type="button" size="sm" variant="secondary" className="w-full" onClick={onOpen}>
+          Open all at-risk files
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function JobTable({
+  jobs,
+  showDays,
+  showMeta,
+}: {
+  jobs: Array<ShipmentJob & { cycleDays?: number | null }>;
+  showDays?: boolean;
+  showMeta?: boolean;
+}) {
+  if (jobs.length === 0) {
+    return <p className="text-sm text-[var(--color-fg-muted)]">No jobs in this slice.</p>;
+  }
+  return (
+    <table className="w-full min-w-[520px] text-sm">
+      <thead>
+        <tr className="text-left text-xs uppercase text-[var(--color-fg-subtle)]">
+          <th className="pb-2 pr-2">Job</th>
+          <th className="pb-2 pr-2">Customer</th>
+          {showMeta && <th className="pb-2 pr-2">St</th>}
+          {showMeta && <th className="pb-2 pr-2">BSR</th>}
+          <th className="pb-2 pr-2 text-right">EGM</th>
+          {(showDays || showMeta) && <th className="pb-2 pr-2 text-right">Days</th>}
+          <th className="pb-2 text-right">$</th>
+        </tr>
+      </thead>
+      <tbody>
+        {jobs.map((j) => {
+          const days = j.cycleDays ?? jobCycleDays(j);
+          const hot = j.egmPct > 0 && j.egmPct < EGM_FLOOR;
+          return (
+            <tr key={`${j.id}-${j.month}`} className="border-b border-[var(--color-border)]/60">
+              <td className="py-1.5 pr-2 tabular">{j.id}</td>
+              <td className="py-1.5 pr-2">{j.customer || "—"}</td>
+              {showMeta && <td className="py-1.5 pr-2">{j.state || "—"}</td>}
+              {showMeta && <td className="py-1.5 pr-2">{j.bsr || "—"}</td>}
+              <td
+                className={cn(
+                  "py-1.5 pr-2 text-right tabular",
+                  hot && "text-[var(--color-danger)]",
+                )}
+              >
+                {j.egmPct.toFixed(1)}%
+              </td>
+              {(showDays || showMeta) && (
+                <td className="py-1.5 pr-2 text-right tabular">{days != null && days >= 0 ? days : "—"}</td>
+              )}
+              <td className="py-1.5 text-right tabular">{formatCurrency(j.revenue, true)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

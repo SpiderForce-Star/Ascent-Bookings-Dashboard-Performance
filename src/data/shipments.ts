@@ -257,27 +257,77 @@ function normalizeCustomer(name: string): string {
   return n;
 }
 
-/** Jobs with EGM under 20% — pricing / scope / missing CO risk. */
-export function lowEgmJobs(threshold = 20, limit = 12) {
-  const closed = new Set<string>(CLOSED_2026.map((m) => m.month));
-  return SHIPMENT_JOBS.filter((j) => closed.has(j.month) && j.egmPct > 0 && j.egmPct < threshold)
-    .sort((a, b) => a.egmPct - b.egmPct)
-    .slice(0, limit);
+/** Board floor — cells under this print red. */
+export const EGM_FLOOR = 25;
+export const EGM_CRITICAL = 20;
+export const LONG_CYCLE_DAYS = 120;
+
+/** Core Southeast plant states. Everything else is long-haul. */
+export const CORE_SE_STATES = new Set(["AL", "FL", "GA", "KY", "NC", "SC", "TN", "VA"]);
+
+export type EgmBandId = "under20" | "20-25" | "25-30" | "30plus";
+export type HygieneFlag = "low-egm" | "long-cycle" | "band-20-25";
+export type ShipmentRegion = "core-se" | "long-haul";
+
+export interface ShipmentJobFilter {
+  band?: EgmBandId | "under25";
+  state?: string;
+  bsr?: string;
+  kind?: JobKind;
+  region?: ShipmentRegion;
+  hygiene?: boolean;
 }
 
-/** Long-cycle signal: ERD more than 180 days before month-end ship window. */
-export function longCycleJobs(limit = 10) {
-  const closed = new Set<string>(CLOSED_2026.map((m) => m.month));
-  const scored = SHIPMENT_JOBS.filter((j) => closed.has(j.month) && j.erd).map((j) => {
-    const erd = new Date(j.erd! + "T12:00:00").getTime();
-    const ship = new Date(2026, j.monthIndex + 1, 0).getTime();
-    const days = Math.round((ship - erd) / 86_400_000);
-    return { ...j, cycleDays: days };
-  });
-  return scored
-    .filter((j) => j.cycleDays >= 120)
-    .sort((a, b) => b.cycleDays - a.cycleDays)
-    .slice(0, limit);
+export interface EgmBandRow {
+  id: EgmBandId;
+  label: string;
+  hint: string;
+  revenue: number;
+  count: number;
+  egm: number;
+  egmPct: number;
+}
+
+export interface EgmHeatCell {
+  key: string;
+  label: string;
+  state?: string;
+  kind?: JobKind;
+  bsr?: string;
+  region?: ShipmentRegion;
+  revenue: number;
+  count: number;
+  egm: number;
+  /** Weighted EGM 0–1 */
+  egmPct: number;
+  under25Rev: number;
+  under25Count: number;
+}
+
+export interface EgmStateRow {
+  state: string;
+  total: EgmHeatCell;
+  byKind: Record<JobKind, EgmHeatCell>;
+}
+
+export interface HygieneJob extends ShipmentJob {
+  cycleDays: number | null;
+  flags: HygieneFlag[];
+  riskScore: number;
+}
+
+export interface CoHygieneReport {
+  deferredLoss: number;
+  slippage: number;
+  longCycleRev: number;
+  longCycleCount: number;
+  lowEgmRev: number;
+  lowEgmCount: number;
+  band20to25Rev: number;
+  band20to25Count: number;
+  jobsAtRiskRev: number;
+  jobsAtRiskCount: number;
+  jobs: HygieneJob[];
 }
 
 export const KIND_LABEL: Record<JobKind, string> = {
@@ -285,5 +335,317 @@ export const KIND_LABEL: Record<JobKind, string> = {
   component: "Component (C)",
   insulation: "Insulation",
 };
+
+export const KIND_SHORT: Record<JobKind, string> = {
+  building: "Building",
+  component: "Comp",
+  insulation: "Insul",
+};
+
+const BAND_DEFS: Array<{ id: EgmBandId; label: string; hint: string; min: number; max: number }> = [
+  { id: "under20", label: "<20%", hint: "Critical — pricing or missing CO", min: 0, max: 20 },
+  { id: "20-25", label: "20–25%", hint: "Below the 25% floor — the real leak", min: 20, max: 25 },
+  { id: "25-30", label: "25–30%", hint: "At or just over the floor", min: 25, max: 30 },
+  { id: "30plus", label: "30%+", hint: "Above the floor", min: 30, max: Infinity },
+];
+
+function closedMonthSet(): Set<string> {
+  return new Set(CLOSED_2026.map((m) => m.month));
+}
+
+function closedJobs(): ShipmentJob[] {
+  const closed = closedMonthSet();
+  return SHIPMENT_JOBS.filter((j) => closed.has(j.month));
+}
+
+export function isCoreSe(state: string | null): boolean {
+  return !!state && CORE_SE_STATES.has(state);
+}
+
+/** Days from ERD to month-end of the ship month. Null if no ERD. */
+export function jobCycleDays(job: ShipmentJob): number | null {
+  if (!job.erd) return null;
+  const erd = new Date(`${job.erd}T12:00:00`).getTime();
+  if (Number.isNaN(erd)) return null;
+  const ship = new Date(2026, job.monthIndex + 1, 0).getTime();
+  return Math.round((ship - erd) / 86_400_000);
+}
+
+export function jobMatchesFilter(job: ShipmentJob, filter: ShipmentJobFilter): boolean {
+  if (filter.band) {
+    const e = job.egmPct;
+    if (filter.band === "under20" && !(e > 0 && e < 20)) return false;
+    if (filter.band === "20-25" && !(e >= 20 && e < 25)) return false;
+    if (filter.band === "25-30" && !(e >= 25 && e < 30)) return false;
+    if (filter.band === "30plus" && !(e >= 30)) return false;
+    if (filter.band === "under25" && !(e > 0 && e < EGM_FLOOR)) return false;
+  }
+  if (filter.state && (job.state || "—") !== filter.state) return false;
+  if (filter.bsr && (job.bsr || "—") !== filter.bsr) return false;
+  if (filter.kind && job.kind !== filter.kind) return false;
+  if (filter.region === "core-se" && !isCoreSe(job.state)) return false;
+  if (filter.region === "long-haul" && isCoreSe(job.state)) return false;
+  if (filter.hygiene) {
+    const days = jobCycleDays(job);
+    const low = job.egmPct > 0 && job.egmPct < EGM_CRITICAL;
+    const long = days != null && days >= LONG_CYCLE_DAYS;
+    if (!low && !long) return false;
+  }
+  return true;
+}
+
+export function filterShipmentJobs(filter: ShipmentJobFilter, limit?: number): ShipmentJob[] {
+  const rows = closedJobs()
+    .filter((j) => jobMatchesFilter(j, filter))
+    .sort((a, b) => b.revenue - a.revenue);
+  return limit != null ? rows.slice(0, limit) : rows;
+}
+
+function emptyBucket() {
+  return { revenue: 0, egm: 0, count: 0, under25Rev: 0, under25Count: 0 };
+}
+
+type Bucket = ReturnType<typeof emptyBucket>;
+
+function addToBucket(b: Bucket, job: ShipmentJob) {
+  b.revenue += job.revenue;
+  b.egm += (job.revenue * job.egmPct) / 100;
+  b.count += 1;
+  if (job.egmPct > 0 && job.egmPct < EGM_FLOOR) {
+    b.under25Rev += job.revenue;
+    b.under25Count += 1;
+  }
+}
+
+function cellFromBucket(
+  key: string,
+  label: string,
+  b: Bucket,
+  extra: Partial<Pick<EgmHeatCell, "state" | "kind" | "bsr" | "region">> = {},
+): EgmHeatCell {
+  return {
+    key,
+    label,
+    ...extra,
+    revenue: b.revenue,
+    count: b.count,
+    egm: b.egm,
+    egmPct: b.revenue > 0 ? b.egm / b.revenue : 0,
+    under25Rev: b.under25Rev,
+    under25Count: b.under25Count,
+  };
+}
+
+/** Revenue sitting in each EGM band — 20–25% is the leak. */
+export function egmBandBreakdown(): EgmBandRow[] {
+  const buckets: Record<EgmBandId, Bucket> = {
+    under20: emptyBucket(),
+    "20-25": emptyBucket(),
+    "25-30": emptyBucket(),
+    "30plus": emptyBucket(),
+  };
+  for (const j of closedJobs()) {
+    const e = j.egmPct;
+    if (e <= 0) continue;
+    const id: EgmBandId = e < 20 ? "under20" : e < 25 ? "20-25" : e < 30 ? "25-30" : "30plus";
+    addToBucket(buckets[id], j);
+  }
+  return BAND_DEFS.map((def) => {
+    const b = buckets[def.id];
+    return {
+      id: def.id,
+      label: def.label,
+      hint: def.hint,
+      revenue: b.revenue,
+      count: b.count,
+      egm: b.egm,
+      egmPct: b.revenue > 0 ? b.egm / b.revenue : 0,
+    };
+  });
+}
+
+export function egmRegionHeat(): EgmHeatCell[] {
+  const buckets: Record<ShipmentRegion, Bucket> = {
+    "core-se": emptyBucket(),
+    "long-haul": emptyBucket(),
+  };
+  for (const j of closedJobs()) {
+    addToBucket(buckets[isCoreSe(j.state) ? "core-se" : "long-haul"], j);
+  }
+  return [
+    cellFromBucket("core-se", "Core Southeast", buckets["core-se"], { region: "core-se" }),
+    cellFromBucket("long-haul", "Long haul", buckets["long-haul"], { region: "long-haul" }),
+  ];
+}
+
+/** State × product heat. States under $250k shipped roll into Other. */
+export function egmStateHeat(minRevenue = 250_000): EgmStateRow[] {
+  const kinds: JobKind[] = ["building", "component", "insulation"];
+  const byState = new Map<string, { total: Bucket; byKind: Record<JobKind, Bucket> }>();
+  const other = {
+    total: emptyBucket(),
+    byKind: {
+      building: emptyBucket(),
+      component: emptyBucket(),
+      insulation: emptyBucket(),
+    } as Record<JobKind, Bucket>,
+  };
+
+  const prelim = new Map<string, number>();
+  for (const j of closedJobs()) {
+    const st = j.state || "—";
+    prelim.set(st, (prelim.get(st) ?? 0) + j.revenue);
+  }
+
+  for (const j of closedJobs()) {
+    const st = j.state || "—";
+    const keep = (prelim.get(st) ?? 0) >= minRevenue && st !== "—";
+    const slot = keep
+      ? byState.get(st) ??
+        (() => {
+          const created = {
+            total: emptyBucket(),
+            byKind: {
+              building: emptyBucket(),
+              component: emptyBucket(),
+              insulation: emptyBucket(),
+            } as Record<JobKind, Bucket>,
+          };
+          byState.set(st, created);
+          return created;
+        })()
+      : other;
+    addToBucket(slot.total, j);
+    addToBucket(slot.byKind[j.kind] ?? slot.byKind.building, j);
+  }
+
+  const rows: EgmStateRow[] = [...byState.entries()]
+    .map(([state, slot]) => ({
+      state,
+      total: cellFromBucket(`${state}-all`, state, slot.total, { state }),
+      byKind: Object.fromEntries(
+        kinds.map((k) => [k, cellFromBucket(`${state}-${k}`, `${state} ${KIND_SHORT[k]}`, slot.byKind[k], { state, kind: k })]),
+      ) as Record<JobKind, EgmHeatCell>,
+    }))
+    .sort((a, b) => b.total.revenue - a.total.revenue);
+
+  if (other.total.count > 0) {
+    rows.push({
+      state: "Other",
+      total: cellFromBucket("other-all", "Other", other.total),
+      byKind: Object.fromEntries(
+        kinds.map((k) => [k, cellFromBucket(`other-${k}`, `Other ${KIND_SHORT[k]}`, other.byKind[k], { kind: k })]),
+      ) as Record<JobKind, EgmHeatCell>,
+    });
+  }
+  return rows;
+}
+
+export function egmBsrHeat(minRevenue = 100_000): EgmHeatCell[] {
+  const map = new Map<string, Bucket>();
+  for (const j of closedJobs()) {
+    const key = (j.bsr || "—").trim() || "—";
+    const b = map.get(key) ?? emptyBucket();
+    addToBucket(b, j);
+    map.set(key, b);
+  }
+  return [...map.entries()]
+    .map(([bsr, b]) => cellFromBucket(bsr, bsr, b, { bsr }))
+    .filter((c) => c.revenue >= minRevenue)
+    .sort((a, b) => b.under25Rev - a.under25Rev || a.egmPct - b.egmPct);
+}
+
+export function hygieneFlags(job: ShipmentJob): HygieneFlag[] {
+  const flags: HygieneFlag[] = [];
+  if (job.egmPct > 0 && job.egmPct < EGM_CRITICAL) flags.push("low-egm");
+  if (job.egmPct >= EGM_CRITICAL && job.egmPct < EGM_FLOOR) flags.push("band-20-25");
+  const days = jobCycleDays(job);
+  if (days != null && days >= LONG_CYCLE_DAYS) flags.push("long-cycle");
+  return flags;
+}
+
+function hygieneScore(job: ShipmentJob, flags: HygieneFlag[], days: number | null): number {
+  let score = 0;
+  if (flags.includes("low-egm")) score += (EGM_CRITICAL - job.egmPct) * 3 + 10;
+  if (flags.includes("band-20-25")) score += 4;
+  if (flags.includes("long-cycle") && days != null) score += Math.min(20, days / 30);
+  score += Math.min(8, job.revenue / 200_000);
+  return score;
+}
+
+/** Deferred loss + start-end slippage + long-cycle + low EGM — one hygiene picture. */
+export function coHygieneReport(limit = 12): CoHygieneReport {
+  const metrics = computeShipmentMetrics();
+  const jobs: HygieneJob[] = [];
+  let longCycleRev = 0;
+  let longCycleCount = 0;
+  let lowEgmRev = 0;
+  let lowEgmCount = 0;
+  let band20to25Rev = 0;
+  let band20to25Count = 0;
+  let jobsAtRiskRev = 0;
+  let jobsAtRiskCount = 0;
+
+  for (const j of closedJobs()) {
+    const days = jobCycleDays(j);
+    const flags = hygieneFlags(j);
+    if (flags.includes("low-egm")) {
+      lowEgmRev += j.revenue;
+      lowEgmCount += 1;
+    }
+    if (flags.includes("band-20-25")) {
+      band20to25Rev += j.revenue;
+      band20to25Count += 1;
+    }
+    if (flags.includes("long-cycle")) {
+      longCycleRev += j.revenue;
+      longCycleCount += 1;
+    }
+    const atRisk = flags.includes("low-egm") || flags.includes("long-cycle");
+    if (atRisk) {
+      jobsAtRiskRev += j.revenue;
+      jobsAtRiskCount += 1;
+      jobs.push({
+        ...j,
+        cycleDays: days,
+        flags,
+        riskScore: hygieneScore(j, flags, days),
+      });
+    }
+  }
+
+  jobs.sort((a, b) => b.riskScore - a.riskScore || b.revenue - a.revenue);
+
+  return {
+    deferredLoss: metrics.deferredLoss,
+    slippage: metrics.slippage,
+    longCycleRev,
+    longCycleCount,
+    lowEgmRev,
+    lowEgmCount,
+    band20to25Rev,
+    band20to25Count,
+    jobsAtRiskRev,
+    jobsAtRiskCount,
+    jobs: jobs.slice(0, limit),
+  };
+}
+
+/** Jobs with EGM under 20% — pricing / scope / missing CO risk. */
+export function lowEgmJobs(threshold = 20, limit = 12) {
+  return closedJobs()
+    .filter((j) => j.egmPct > 0 && j.egmPct < threshold)
+    .sort((a, b) => a.egmPct - b.egmPct)
+    .slice(0, limit);
+}
+
+/** Long-cycle signal: ERD ≥ 120 days before month-end of the ship window. */
+export function longCycleJobs(limit = 10) {
+  return closedJobs()
+    .map((j) => ({ ...j, cycleDays: jobCycleDays(j) ?? -1 }))
+    .filter((j) => j.cycleDays >= LONG_CYCLE_DAYS)
+    .sort((a, b) => b.cycleDays - a.cycleDays)
+    .slice(0, limit);
+}
 
 
