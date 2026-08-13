@@ -110,7 +110,7 @@ async function fetchFredSeries(meta: (typeof FRED_SERIES)[0]): Promise<FeedSerie
   });
   if (!res.ok) throw new Error(`FRED ${meta.id} HTTP ${res.status}`);
   const text = await res.text();
-  const history = parseFredCsv(text).slice(-18);
+  const history = parseFredCsv(text).slice(-60);
   if (history.length < 2) throw new Error(`FRED ${meta.id} insufficient points`);
   const latest = history[history.length - 1]!;
   const prior = history[history.length - 2]!;

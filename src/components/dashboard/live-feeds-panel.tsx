@@ -1,7 +1,9 @@
 import {
   Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -35,6 +37,69 @@ function formatFeedValue(s: FeedSeries): string {
   if (s.unit.includes("thousands")) return `${formatNumber(v, 0)}k`;
   if (s.unit === "index") return formatNumber(v, 1);
   return formatNumber(v, 1);
+}
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function shortMonth(iso: string): string {
+  const [year, month] = iso.split("-");
+  const m = Number(month);
+  if (!year || !m) return iso;
+  return `${MONTH_SHORT[m - 1]} '${year.slice(2)}`;
+}
+
+function formatBillions(billions: number): string {
+  if (billions >= 1000) return `$${(billions / 1000).toFixed(2)}T`;
+  return `$${billions.toFixed(0)}B`;
+}
+
+/** Zoom Y to the series range so a $1.3T SAAR line is not a flat ruler from zero. */
+function zoomDomain(values: number[]): [number, number] {
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (!nums.length) return [0, 1];
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const span = Math.max(max - min, Math.abs(min) * 0.02, 1);
+  const pad = span * 0.12;
+  return [Math.max(0, min - pad), max + pad];
+}
+
+function buildNonresChart(history: { date: string; value: number }[]) {
+  return history.map((p, i) => {
+    const ago = history[i - 12];
+    return {
+      date: p.date.slice(0, 7),
+      billions: p.value / 1000,
+      yoy: ago ? ((p.value - ago.value) / Math.abs(ago.value)) * 100 : null,
+    };
+  });
+}
+
+function NonresTip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ dataKey: string; value: number; name: string; color: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 shadow-[var(--shadow-md)]">
+      <p className="mb-1 text-xs font-medium">{label ? shortMonth(label) : ""}</p>
+      {payload.map((e) => (
+        <div key={e.dataKey} className="flex justify-between gap-6 text-xs">
+          <span className="text-[var(--color-fg-muted)]">{e.name}</span>
+          <span className="tabular font-medium">
+            {e.dataKey === "yoy"
+              ? `${Number(e.value) >= 0 ? "+" : ""}${Number(e.value).toFixed(1)}%`
+              : formatBillions(Number(e.value))}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Mom({ pct }: { pct: number | null }) {
@@ -87,11 +152,8 @@ export function LiveFeedsPanel() {
   const other = data.series.filter((s) => s.relevance !== "high");
 
   const chartSeries = data.series.find((s) => s.id === "TLNRESCONS") ?? data.series[0];
-  const chartData =
-    chartSeries?.history.map((p) => ({
-      date: p.date.slice(0, 7),
-      value: p.value,
-    })) ?? [];
+  const chartData = buildNonresChart(chartSeries?.history ?? []);
+  const levelDomain = zoomDomain(chartData.map((d) => d.billions));
 
   return (
     <div className="space-y-4">
@@ -229,16 +291,17 @@ export function LiveFeedsPanel() {
           <CardHeader>
             <CardTitle>{chartSeries?.label ?? "Nonresidential construction"}</CardTitle>
             <CardDescription>
-              FRED history · {chartSeries?.unit ?? ""} · source {chartSeries?.status ?? "—"}
+              Last 5 years · $ billions SAAR, axis zoomed to the range (not zero) so the move
+              shows · YoY % on the right
             </CardDescription>
           </CardHeader>
-          <CardContent className="h-64 pt-0 sm:h-72">
+          <CardContent className="h-72 pt-0 sm:h-80">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="liveFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.2} />
+                      <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.22} />
                       <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -248,33 +311,49 @@ export function LiveFeedsPanel() {
                     tick={{ fontSize: 10, fill: "var(--color-fg-subtle)" }}
                     axisLine={false}
                     tickLine={false}
-                    interval="preserveStartEnd"
+                    interval={5}
+                    tickFormatter={shortMonth}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "var(--color-fg-subtle)" }}
+                    yAxisId="level"
+                    domain={levelDomain}
+                    tick={{ fontSize: 10, fill: "var(--color-fg-subtle)" }}
                     axisLine={false}
                     tickLine={false}
-                    width={52}
-                    tickFormatter={(v) =>
-                      v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
-                    }
+                    width={44}
+                    tickFormatter={(v) => formatBillions(Number(v))}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: 8,
-                      border: "1px solid var(--color-border)",
-                      fontSize: 12,
-                    }}
-                    formatter={(value: number) => [formatNumber(value, 0), "Value"]}
+                  <YAxis
+                    yAxisId="yoy"
+                    orientation="right"
+                    tick={{ fontSize: 10, fill: "var(--color-fg-subtle)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={36}
+                    tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
                   />
+                  <Tooltip content={<NonresTip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
                   <Area
+                    yAxisId="level"
                     type="monotone"
-                    dataKey="value"
+                    dataKey="billions"
+                    name="Level ($B SAAR)"
                     stroke="var(--color-primary)"
                     strokeWidth={2.5}
                     fill="url(#liveFill)"
                   />
-                </AreaChart>
+                  <Line
+                    yAxisId="yoy"
+                    type="monotone"
+                    dataKey="yoy"
+                    name="YoY %"
+                    stroke="var(--color-chart-2)"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-[var(--color-fg-muted)]">
