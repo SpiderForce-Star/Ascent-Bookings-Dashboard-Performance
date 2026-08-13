@@ -31,11 +31,13 @@ import {
   longCycleJobs,
   lowEgmJobs,
   mixBreakdown,
+  mixGrandTotal,
   shipmentChartSeries,
   topCustomers,
   topStates,
   type EgmHeatCell,
   type JobKind,
+  type MixRow,
   type ShipmentJob,
   type ShipmentJobFilter,
 } from "@/data/shipments";
@@ -118,6 +120,7 @@ export function ShipmentsPanel() {
   const m = useMemo(() => computeShipmentMetrics(), []);
   const series = useMemo(() => shipmentChartSeries(), []);
   const mix = useMemo(() => mixBreakdown(), []);
+  const mixGrand = useMemo(() => mixGrandTotal(mix), [mix]);
   const customers = useMemo(() => topCustomers(10), []);
   const states = useMemo(() => topStates(10), []);
   const low = useMemo(() => lowEgmJobs(20, 12), []);
@@ -195,6 +198,14 @@ export function ShipmentsPanel() {
         {formatCurrency(m.freight, true)} · discounts {formatCurrency(m.discounts, true)} · overlapping-month YoY
         shipped {formatPercent(m.growth)}. Source: {SHIPMENT_SOURCE}.
       </p>
+
+      <OrderTypeTotals
+        mix={mix}
+        grand={mixGrand}
+        componentFocus={filter?.kind === "component"}
+        onComponents={() => openJobs({ kind: "component" })}
+        onKind={(kind) => openJobs({ kind })}
+      />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <EgmControlTower
@@ -315,22 +326,57 @@ export function ShipmentsPanel() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Mix</CardTitle>
-                <CardDescription>Building vs component vs insulation</CardDescription>
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="text-base">Mix</CardTitle>
+                  <CardDescription>Building vs component (C) vs insulation · job lines</CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={filter?.kind === "component" ? "default" : "secondary"}
+                  className="h-7 rounded-full"
+                  onClick={() => openJobs({ kind: "component" })}
+                >
+                  Components only
+                </Button>
               </CardHeader>
-              <CardContent className="space-y-3 pt-0">
+              <CardContent className="space-y-2 pt-0">
                 {mix.map((row) => (
-                  <div key={row.kind}>
+                  <button
+                    key={row.kind}
+                    type="button"
+                    onClick={() => openJobs({ kind: row.kind })}
+                    className={cn(
+                      "w-full rounded-[var(--radius-md)] px-2 py-1.5 text-left",
+                      row.kind === "component" && "border border-[var(--color-primary)]/30 bg-[var(--color-primary-soft)]/50",
+                      filter?.kind === row.kind && "ring-2 ring-[var(--color-primary)]",
+                    )}
+                  >
                     <div className="flex justify-between text-sm">
-                      <span>{row.label}</span>
+                      <span className="flex items-center gap-1.5">
+                        {row.label}
+                        {row.kind === "component" && (
+                          <Badge variant="default" className="text-[10px]">
+                            C
+                          </Badge>
+                        )}
+                      </span>
                       <span className="tabular font-medium">{formatCurrency(row.revenue, true)}</span>
                     </div>
                     <p className="text-[11px] text-[var(--color-fg-subtle)]">
-                      {row.count} lines · {(row.egmPct * 100).toFixed(1)}% EGM
+                      {row.count} jobs · {formatCurrency(row.egm, true)} EGM · {(row.egmPct * 100).toFixed(1)}%
                     </p>
-                  </div>
+                  </button>
                 ))}
+                <div className="flex justify-between border-t border-[var(--color-border-strong)] pt-2 text-sm font-semibold">
+                  <span>Grand Total</span>
+                  <span className="tabular">{formatCurrency(mixGrand.revenue, true)}</span>
+                </div>
+                <p className="text-[11px] text-[var(--color-fg-subtle)]">
+                  {mixGrand.count} jobs · {formatCurrency(mixGrand.egm, true)} EGM ·{" "}
+                  {(mixGrand.egmPct * 100).toFixed(1)}% blended
+                </p>
               </CardContent>
             </Card>
             <Card>
@@ -436,6 +482,95 @@ export function ShipmentsPanel() {
 
       <p className="text-[11px] text-[var(--color-fg-subtle)]">{SHIPMENT_NOTES}</p>
     </div>
+  );
+}
+
+function OrderTypeTotals({
+  mix,
+  grand,
+  componentFocus,
+  onComponents,
+  onKind,
+}: {
+  mix: Array<MixRow & { kind: JobKind }>;
+  grand: MixRow;
+  componentFocus: boolean;
+  onComponents: () => void;
+  onKind: (kind: JobKind) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle className="text-base">Order type totals</CardTitle>
+          <CardDescription>
+            Job numbers ending in C are component orders. Grand Total is all closed job lines
+            (building + component + insulation). Freight sits outside this mix.
+          </CardDescription>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={componentFocus ? "default" : "secondary"}
+          className="h-8 rounded-full"
+          onClick={onComponents}
+        >
+          Components only
+        </Button>
+      </CardHeader>
+      <CardContent className="overflow-x-auto pt-0">
+        <table className="w-full min-w-[520px] text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase text-[var(--color-fg-subtle)]">
+              <th className="pb-2 pr-2 font-medium">Type</th>
+              <th className="pb-2 pr-2 text-right font-medium">Jobs</th>
+              <th className="pb-2 pr-2 text-right font-medium">Revenue</th>
+              <th className="pb-2 pr-2 text-right font-medium">EGM $</th>
+              <th className="pb-2 text-right font-medium">EGM %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mix.map((row) => {
+              const isComp = row.kind === "component";
+              const label = componentFocus && isComp ? "Component Grand Total" : row.label;
+              return (
+                <tr
+                  key={row.kind}
+                  className={cn(
+                    "border-b border-[var(--color-border)]/60",
+                    isComp && "bg-[var(--color-primary-soft)]/40",
+                  )}
+                >
+                  <td className="py-2 pr-2">
+                    <button type="button" onClick={() => onKind(row.kind)} className="inline-flex items-center gap-1.5 font-medium">
+                      {label}
+                      {isComp && (
+                        <Badge variant="default" className="text-[10px]">
+                          C
+                        </Badge>
+                      )}
+                    </button>
+                  </td>
+                  <td className="py-2 pr-2 text-right tabular">{row.count}</td>
+                  <td className="py-2 pr-2 text-right tabular">{formatCurrency(row.revenue, true)}</td>
+                  <td className="py-2 pr-2 text-right tabular">{formatCurrency(row.egm, true)}</td>
+                  <td className="py-2 text-right tabular">{(row.egmPct * 100).toFixed(1)}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] text-sm font-semibold">
+              <td className="py-2.5 pr-2">{componentFocus ? "All types · Grand Total" : "Grand Total"}</td>
+              <td className="py-2.5 pr-2 text-right tabular">{grand.count}</td>
+              <td className="py-2.5 pr-2 text-right tabular">{formatCurrency(grand.revenue, true)}</td>
+              <td className="py-2.5 pr-2 text-right tabular">{formatCurrency(grand.egm, true)}</td>
+              <td className="py-2.5 text-right tabular">{(grand.egmPct * 100).toFixed(1)}%</td>
+            </tr>
+          </tfoot>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -840,7 +975,16 @@ function JobTable({
           const hot = j.egmPct > 0 && j.egmPct < EGM_FLOOR;
           return (
             <tr key={`${j.id}-${j.month}`} className="border-b border-[var(--color-border)]/60">
-              <td className="py-1.5 pr-2 tabular">{j.id}</td>
+              <td className="py-1.5 pr-2 tabular">
+                <span className="inline-flex items-center gap-1">
+                  {j.id}
+                  {j.kind === "component" && (
+                    <Badge variant="default" className="text-[9px]">
+                      C
+                    </Badge>
+                  )}
+                </span>
+              </td>
               <td className="py-1.5 pr-2">{j.customer || "—"}</td>
               {showMeta && <td className="py-1.5 pr-2">{j.state || "—"}</td>}
               {showMeta && <td className="py-1.5 pr-2">{j.bsr || "—"}</td>}

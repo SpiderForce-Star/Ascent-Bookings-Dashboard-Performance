@@ -90,11 +90,28 @@ const bundle = raw as {
   jobs: ShipmentJob[];
 };
 
+/** Job numbers ending in C (and existing kind=component) are component orders. */
+export function isComponentJob(job: Pick<ShipmentJob, "id" | "kind">): boolean {
+  if (job.kind === "component") return true;
+  const id = (job.id || "").toUpperCase().trim();
+  return /[-]?C$/.test(id) || id.endsWith("C");
+}
+
+/** Prefer stored kind; C-suffix IDs become component. Insulation stays insulation. */
+export function resolveJobKind(job: Pick<ShipmentJob, "id" | "kind">): JobKind {
+  if (job.kind === "insulation") return "insulation";
+  if (isComponentJob(job)) return "component";
+  return "building";
+}
+
 export const SHIPMENT_SOURCE = bundle.source;
 export const SHIPMENT_AS_OF = bundle.asOf;
 export const SHIPMENT_NOTES = bundle.notes;
 export const SHIPMENT_MONTHS: ShipmentMonth[] = bundle.monthly;
-export const SHIPMENT_JOBS: ShipmentJob[] = bundle.jobs;
+export const SHIPMENT_JOBS: ShipmentJob[] = bundle.jobs.map((j) => ({
+  ...j,
+  kind: resolveJobKind(j),
+}));
 export const SHIPMENT_FORWARD = bundle.forwardStart;
 export const SHIPMENT_HISTORY = bundle.historyShipped;
 
@@ -177,7 +194,28 @@ export function shipmentChartSeries() {
   });
 }
 
-export function mixBreakdown() {
+export const KIND_LABEL: Record<JobKind, string> = {
+  building: "Building / main",
+  component: "Component (C)",
+  insulation: "Insulation",
+};
+
+export const KIND_SHORT: Record<JobKind, string> = {
+  building: "Building",
+  component: "Comp",
+  insulation: "Insul",
+};
+
+export interface MixRow {
+  kind: JobKind | "total";
+  label: string;
+  revenue: number;
+  egm: number;
+  egmPct: number;
+  count: number;
+}
+
+export function mixBreakdown(): Array<MixRow & { kind: JobKind }> {
   const closed = new Set<string>(CLOSED_2026.map((m) => m.month));
   const buckets: Record<JobKind, { revenue: number; egm: number; count: number }> = {
     building: { revenue: 0, egm: 0, count: 0 },
@@ -186,7 +224,8 @@ export function mixBreakdown() {
   };
   for (const j of SHIPMENT_JOBS) {
     if (!closed.has(j.month)) continue;
-    const b = buckets[j.kind] ?? buckets.building;
+    const kind = resolveJobKind(j);
+    const b = buckets[kind] ?? buckets.building;
     b.revenue += j.revenue;
     b.egm += (j.revenue * j.egmPct) / 100;
     b.count += 1;
@@ -195,13 +234,28 @@ export function mixBreakdown() {
     const b = buckets[kind];
     return {
       kind,
-      label: kind === "building" ? "Building / main" : kind === "component" ? "Component (C)" : "Insulation",
+      label: KIND_LABEL[kind],
       revenue: b.revenue,
       egm: b.egm,
       egmPct: b.revenue > 0 ? b.egm / b.revenue : 0,
       count: b.count,
     };
   });
+}
+
+/** Building + component + insulation — must equal closed job-line revenue. */
+export function mixGrandTotal(rows: Array<Pick<MixRow, "revenue" | "egm" | "count">> = mixBreakdown()): MixRow {
+  const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const egm = rows.reduce((s, r) => s + r.egm, 0);
+  const count = rows.reduce((s, r) => s + r.count, 0);
+  return {
+    kind: "total",
+    label: "Grand Total",
+    revenue,
+    egm,
+    egmPct: revenue > 0 ? egm / revenue : 0,
+    count,
+  };
 }
 
 export function topCustomers(n = 10) {
@@ -330,18 +384,6 @@ export interface CoHygieneReport {
   jobs: HygieneJob[];
 }
 
-export const KIND_LABEL: Record<JobKind, string> = {
-  building: "Building / main",
-  component: "Component (C)",
-  insulation: "Insulation",
-};
-
-export const KIND_SHORT: Record<JobKind, string> = {
-  building: "Building",
-  component: "Comp",
-  insulation: "Insul",
-};
-
 const BAND_DEFS: Array<{ id: EgmBandId; label: string; hint: string; min: number; max: number }> = [
   { id: "under20", label: "<20%", hint: "Critical — pricing or missing CO", min: 0, max: 20 },
   { id: "20-25", label: "20–25%", hint: "Below the 25% floor — the real leak", min: 20, max: 25 },
@@ -382,7 +424,7 @@ export function jobMatchesFilter(job: ShipmentJob, filter: ShipmentJobFilter): b
   }
   if (filter.state && (job.state || "—") !== filter.state) return false;
   if (filter.bsr && (job.bsr || "—") !== filter.bsr) return false;
-  if (filter.kind && job.kind !== filter.kind) return false;
+  if (filter.kind && resolveJobKind(job) !== filter.kind) return false;
   if (filter.region === "core-se" && !isCoreSe(job.state)) return false;
   if (filter.region === "long-haul" && isCoreSe(job.state)) return false;
   if (filter.hygiene) {

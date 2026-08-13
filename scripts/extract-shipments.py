@@ -63,7 +63,7 @@ def classify(job: str) -> str:
     j = job.upper()
     if "-INS" in j or j.endswith("INS"):
         return "insulation"
-    if re.search(r"AG-C|-C(\d|$)|-C$", j):
+    if j.endswith("C") or re.search(r"[-]?C$|-C\d", j):
         return "component"
     return "building"
 

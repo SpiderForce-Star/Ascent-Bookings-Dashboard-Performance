@@ -10,7 +10,7 @@
  *
  * Bump CACHE_VERSION when you change precache list or strategy so clients refresh.
  */
-const CACHE_VERSION = "v10";
+const CACHE_VERSION = "v11";
 const SHELL_CACHE = `ascent-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `ascent-runtime-${CACHE_VERSION}`;
 

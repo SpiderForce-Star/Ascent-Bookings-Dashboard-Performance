@@ -66,8 +66,8 @@ export function BreakdownTable({ rows, monthlyRows }: BreakdownTableProps) {
           <CardTitle>Breakdown</CardTitle>
           <CardDescription>
             {tab === "months"
-              ? "Monthly bookings in the selected range"
-              : "Product / plant mix scaled to 2026 selection"}
+              ? "Monthly bookings in the selected range · Grand Total matches the KPI cards"
+              : "Product / plant mix scaled to 2026 selection · Components Only is a product line, not extra revenue"}
           </CardDescription>
         </div>
         <div className="flex rounded-full bg-[var(--color-bg-subtle)] p-1">
@@ -139,19 +139,19 @@ export function BreakdownTable({ rows, monthlyRows }: BreakdownTableProps) {
             </tbody>
             {monthlyRows.length > 0 && (
               <tfoot>
-                <tr className="border-t border-[var(--color-border-strong)] text-sm font-semibold">
-                  <td className="pt-3 pr-3">Total</td>
-                  <td className="pt-3 pr-3 text-right tabular">
+                <tr className="border-t-2 border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] text-sm font-semibold">
+                  <td className="py-3 pr-3">Grand Total</td>
+                  <td className="py-3 pr-3 text-right tabular">
                     {formatCurrency(monthlyRows.reduce((s, r) => s + r.revenue, 0))}
                   </td>
-                  <td className="pt-3 pr-3 text-right tabular text-[var(--color-fg-muted)]">
+                  <td className="py-3 pr-3 text-right tabular text-[var(--color-fg-muted)]">
                     {formatCurrency(monthlyRows.reduce((s, r) => s + r.priorRevenue, 0))}
                   </td>
-                  <td className="pt-3 pr-3" />
-                  <td className="pt-3 pr-3 text-right tabular">
+                  <td className="py-3 pr-3" />
+                  <td className="py-3 pr-3 text-right tabular">
                     {formatCurrency(monthlyRows.reduce((s, r) => s + r.gm, 0))}
                   </td>
-                  <td className="pt-3 text-right tabular">
+                  <td className="py-3 text-right tabular">
                     {(() => {
                       const rev = monthlyRows.reduce((s, r) => s + r.revenue, 0);
                       const gm = monthlyRows.reduce((s, r) => s + r.gm, 0);
@@ -167,6 +167,33 @@ export function BreakdownTable({ rows, monthlyRows }: BreakdownTableProps) {
             Segment mix is available for 2026 ranges. Choose a 2026 preset to explore product and plant breakdowns.
           </p>
         ) : (
+          <>
+            {(() => {
+              const comp = rows.find((r) => r.id === "comp");
+              const rangeRev = monthlyRows.reduce((s, r) => s + r.revenue, 0);
+              const rangeGm = monthlyRows.reduce((s, r) => s + r.gm, 0);
+              if (!comp || rangeRev <= 0) return null;
+              const share = comp.sell / rangeRev;
+              return (
+                <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--color-primary)]/30 bg-[var(--color-primary-soft)]/50 px-3 py-2.5">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-primary)]">
+                    Components Only · scaled to this range
+                  </p>
+                  <p className="mt-0.5 text-sm">
+                    <span className="font-display text-lg font-semibold tabular">{formatCurrency(comp.sell, true)}</span>
+                    <span className="text-[var(--color-fg-muted)]">
+                      {" "}
+                      · {formatCurrency(comp.gm, true)} GM · {(comp.gmPct * 100).toFixed(1)}% ·{" "}
+                      {(share * 100).toFixed(1)}% of Grand Total
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-[var(--color-fg-subtle)]">
+                    Product-line slice of booked work — already inside the {formatCurrency(rangeRev, true)} Grand
+                    Total ({formatCurrency(rangeGm, true)} GM). Not extra bookings.
+                  </p>
+                </div>
+              );
+            })()}
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
@@ -197,15 +224,27 @@ export function BreakdownTable({ rows, monthlyRows }: BreakdownTableProps) {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row) => (
+              {sorted.map((row) => {
+                const isComp = row.id === "comp";
+                return (
                 <tr
                   key={row.id}
-                  className="border-b border-[var(--color-border)]/70 transition-colors hover:bg-[var(--color-bg-subtle)]/60"
+                  className={cn(
+                    "border-b border-[var(--color-border)]/70 transition-colors hover:bg-[var(--color-bg-subtle)]/60",
+                    isComp && "bg-[var(--color-primary-soft)]/40",
+                  )}
                   title={`${row.name} · ${categoryLabel[row.category]}`}
                 >
                   <td className="py-3 pr-3">
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">{row.name}</span>
+                      <span className="inline-flex items-center gap-1.5 font-medium">
+                        {isComp ? "Components Only (C)" : row.name}
+                        {isComp && (
+                          <Badge variant="default" className="text-[10px]">
+                            C
+                          </Badge>
+                        )}
+                      </span>
                       <span className="text-xs text-[var(--color-fg-subtle)]">{categoryLabel[row.category]}</span>
                     </div>
                   </td>
@@ -227,9 +266,38 @@ export function BreakdownTable({ rows, monthlyRows }: BreakdownTableProps) {
                     {row.weight > 0 ? formatNumber(row.weight, 0) : "—"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
+            {monthlyRows.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] text-sm font-semibold">
+                  <td className="py-3 pr-3">
+                    Grand Total
+                    <span className="block text-xs font-normal text-[var(--color-fg-subtle)]">
+                      Range bookings — segments overlap and do not sum to this
+                    </span>
+                  </td>
+                  <td className="py-3 pl-3 text-right tabular">
+                    {formatCurrency(monthlyRows.reduce((s, r) => s + r.revenue, 0))}
+                  </td>
+                  <td className="py-3 pl-3 text-right tabular">
+                    {formatCurrency(monthlyRows.reduce((s, r) => s + r.gm, 0))}
+                  </td>
+                  <td className="py-3 pl-3 text-right tabular">
+                    {(() => {
+                      const rev = monthlyRows.reduce((s, r) => s + r.revenue, 0);
+                      const gm = monthlyRows.reduce((s, r) => s + r.gm, 0);
+                      return rev > 0 ? `${((gm / rev) * 100).toFixed(1)}%` : "—";
+                    })()}
+                  </td>
+                  <td className="py-3 pl-3" />
+                  <td className="py-3 pl-3" />
+                </tr>
+              </tfoot>
+            )}
           </table>
+          </>
         )}
       </CardContent>
     </Card>
