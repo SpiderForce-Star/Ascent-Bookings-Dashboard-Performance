@@ -19,6 +19,7 @@ import { LiveFeedsPanel } from "./live-feeds-panel";
 import { DodgePanel } from "./dodge-panel";
 import { SalesSheetsPanel } from "./sales-sheets-panel";
 import { SteelForecastPanel } from "./steel-forecast-panel";
+import { BookedShippedStrip, ShipmentsPanel } from "./shipments-panel";
 import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import {
   FileSpreadsheet,
@@ -30,6 +31,7 @@ import {
   GanttChartSquare,
   ClipboardList,
   Flame,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,7 @@ const defaultRange = defaultPreset.range!;
 
 type TabId =
   | "performance"
+  | "shipments"
   | "feeds"
   | "dodge"
   | "forecast"
@@ -49,6 +52,7 @@ type TabId =
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
+  { id: "shipments", label: "Shipments", icon: Truck },
   { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
   { id: "forecast", label: "Sales forecast", icon: LineChart },
@@ -191,11 +195,13 @@ export function Dashboard() {
 
               <KpiCards metrics={metrics} />
               <BoardBriefStrip metrics={metrics} feedsLive={feeds.live} composite={feeds.signal.compositeIndex} />
+              <BookedShippedStrip />
               <TrendCharts data={series} />
               <BreakdownTable rows={segments} monthlyRows={series} />
             </>
           )}
 
+          {tab === "shipments" && <ShipmentsPanel />}
           {tab === "feeds" && <LiveFeedsPanel />}
           {tab === "dodge" && <DodgePanel />}
           {tab === "forecast" && <ForecastPanel />}
