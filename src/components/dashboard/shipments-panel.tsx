@@ -485,6 +485,14 @@ export function ShipmentsPanel() {
   );
 }
 
+const COMPONENT_EGM_TARGET = 0.3;
+
+function componentEgmTone(egmPct: number): "success" | "warn" | "danger" {
+  if (egmPct >= COMPONENT_EGM_TARGET) return "success";
+  if (egmPct >= EGM_FLOOR / 100) return "warn";
+  return "danger";
+}
+
 function OrderTypeTotals({
   mix,
   grand,
@@ -498,6 +506,10 @@ function OrderTypeTotals({
   onComponents: () => void;
   onKind: (kind: JobKind) => void;
 }) {
+  const component = mix.find((r) => r.kind === "component");
+  const share = grand.revenue > 0 && component ? component.revenue / grand.revenue : 0;
+  const tone = component ? componentEgmTone(component.egmPct) : "warn";
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-start sm:justify-between">
@@ -519,6 +531,61 @@ function OrderTypeTotals({
         </Button>
       </CardHeader>
       <CardContent className="overflow-x-auto pt-0">
+        {component && (
+          <button
+            type="button"
+            onClick={onComponents}
+            className={cn(
+              "mb-4 w-full rounded-[var(--radius-md)] border px-3 py-3 text-left",
+              tone === "success" && "border-[var(--color-success)]/35 bg-[var(--color-success-soft)]",
+              tone === "warn" && "border-[var(--color-warn)]/35 bg-[var(--color-warn-soft)]",
+              tone === "danger" && "border-[var(--color-danger)]/35 bg-[var(--color-danger-soft)]",
+            )}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">
+                  Component EGM
+                </p>
+                <p
+                  className={cn(
+                    "font-display text-2xl font-semibold tabular",
+                    tone === "success" && "text-[var(--color-success)]",
+                    tone === "warn" && "text-[var(--color-warn)]",
+                    tone === "danger" && "text-[var(--color-danger)]",
+                  )}
+                >
+                  {(component.egmPct * 100).toFixed(1)}%
+                </p>
+              </div>
+              <Badge variant={tone}>vs ~30% typical</Badge>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+              <div>
+                <p className="text-[var(--color-fg-subtle)]">Jobs</p>
+                <p className="font-medium tabular">{component.count}</p>
+              </div>
+              <div>
+                <p className="text-[var(--color-fg-subtle)]">Revenue</p>
+                <p className="font-medium tabular">{formatCurrency(component.revenue, true)}</p>
+              </div>
+              <div>
+                <p className="text-[var(--color-fg-subtle)]">EGM $</p>
+                <p className="font-medium tabular">{formatCurrency(component.egm, true)}</p>
+              </div>
+              <div>
+                <p className="text-[var(--color-fg-subtle)]">Share of job $</p>
+                <p className="font-medium tabular">{(share * 100).toFixed(1)}%</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-[var(--color-fg-muted)]">
+              Component orders (job # ending in C) typically target ~30% EGM.
+              {component.egmPct < COMPONENT_EGM_TARGET
+                ? ` This close is ${((COMPONENT_EGM_TARGET - component.egmPct) * 100).toFixed(1)} pts under that mark.`
+                : " This close is at or above that mark."}
+            </p>
+          </button>
+        )}
         <table className="w-full min-w-[520px] text-sm">
           <thead>
             <tr className="text-left text-xs uppercase text-[var(--color-fg-subtle)]">

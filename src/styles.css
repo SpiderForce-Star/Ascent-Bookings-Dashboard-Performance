@@ -100,7 +100,7 @@
   }
 
   .ascent-logo-spin {
-    animation: ascent-logo-spin 32s linear infinite;
+    animation: ascent-logo-spin 16s linear infinite;
     transform-style: preserve-3d;
     will-change: transform;
   }

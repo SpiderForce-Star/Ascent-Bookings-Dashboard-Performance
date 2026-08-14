@@ -87,9 +87,9 @@ export function Dashboard() {
                 <img
                   src="/logo.jpg"
                   alt="Ascent Buildings"
-                  className="ascent-logo-spin h-12 w-auto object-contain sm:h-14"
-                  width={200}
-                  height={56}
+                  className="ascent-logo-spin h-16 w-auto object-contain sm:h-20"
+                  width={280}
+                  height={80}
                 />
               </div>
               <div className="hidden min-w-0 border-l border-[var(--color-border)] pl-3 sm:block">
