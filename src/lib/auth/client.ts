@@ -1,4 +1,3 @@
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { GROK_PROVIDERS } from "./providers";
 
@@ -13,7 +12,6 @@ import { GROK_PROVIDERS } from "./providers";
  * is stored, so nothing changes.
  */
 export const authClient = createAuthClient({
-  plugins: [genericOAuthClient()],
   fetchOptions: {
     onRequest(ctx) {
       const token = getBearerToken();
@@ -74,6 +72,53 @@ function inLivePreview(): boolean {
 
 /** Message the popup posts back to the opener once sign-in completes. */
 type PopupMessage = { source: "grok-auth-popup"; token: string | null; error?: string };
+
+type OAuthStartResult = {
+  data?: { url?: string } | null;
+  error?: { message?: string } | null;
+};
+
+/** 1.6: `signIn.oauth2` / `/sign-in/oauth2`. 1.7: `signIn.social`. */
+async function startFederatedSignIn(opts: {
+  providerId: string;
+  callbackURL: string;
+  errorCallbackURL: string;
+}): Promise<OAuthStartResult> {
+  const signIn = authClient.signIn as {
+    oauth2?: (o: {
+      providerId: string;
+      callbackURL: string;
+      errorCallbackURL: string;
+    }) => Promise<OAuthStartResult>;
+    social: (o: {
+      provider: string;
+      callbackURL: string;
+      errorCallbackURL: string;
+    }) => Promise<OAuthStartResult>;
+  };
+  if (typeof signIn.oauth2 === "function") {
+    return signIn.oauth2({
+      providerId: opts.providerId,
+      callbackURL: opts.callbackURL,
+      errorCallbackURL: opts.errorCallbackURL,
+    });
+  }
+  const social = await signIn.social({
+    provider: opts.providerId,
+    callbackURL: opts.callbackURL,
+    errorCallbackURL: opts.errorCallbackURL,
+  });
+  if (!social.error) return social;
+  const fallback = await authClient.$fetch<{ url?: string }>("/sign-in/oauth2", {
+    method: "POST",
+    body: {
+      providerId: opts.providerId,
+      callbackURL: opts.callbackURL,
+      errorCallbackURL: opts.errorCallbackURL,
+    },
+  });
+  return fallback.error ? social : fallback;
+}
 
 /**
  * Start sign-in with one upstream provider (`providerId` from `GROK_PROVIDERS`),
@@ -137,7 +182,7 @@ export async function signIn(
     return;
   }
 
-  const { data, error } = await authClient.signIn.oauth2({
+  const { data, error } = await startFederatedSignIn({
     providerId,
     callbackURL,
     errorCallbackURL,
