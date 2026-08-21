@@ -34,7 +34,9 @@ import {
   ClipboardList,
   Flame,
   Truck,
+  Globe,
 } from "lucide-react";
+import { MbmaPanel } from "./mbma-panel";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { InstallToDevice } from "@/components/pwa/InstallToDevice";
@@ -51,6 +53,7 @@ type TabId =
   | "dodge"
   | "forecast"
   | "territory"
+  | "mbma"
   | "sales-sheets"
   | "steel";
 
@@ -59,6 +62,7 @@ const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "mbsd", label: "MBSD", icon: Building2 },
   { id: "shipments", label: "Shipments", icon: Truck },
   { id: "feeds", label: "Market feeds", icon: Radio },
+  { id: "mbma", label: "MBMA", icon: Globe },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
   { id: "forecast", label: "Sales forecast", icon: LineChart },
   { id: "territory", label: "Territory", icon: MapPin },
@@ -66,10 +70,10 @@ const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "steel", label: "Steel cost", icon: Flame },
 ];
 
-export function Dashboard() {
+export function Dashboard({ initialTab = "performance" }: { initialTab?: TabId }) {
   const [preset, setPreset] = useState<DatePreset>("ytd-2026");
   const [range, setRange] = useState<DateRange>(defaultRange);
-  const [tab, setTab] = useState<TabId>("performance");
+  const [tab, setTab] = useState<TabId>(initialTab);
   const { data: feeds } = useConstructionFeeds(true);
 
   const metrics = useMemo(() => computeMetrics(range), [range]);
@@ -216,6 +220,7 @@ export function Dashboard() {
           {tab === "dodge" && <DodgePanel />}
           {tab === "forecast" && <ForecastPanel />}
           {tab === "territory" && <TerritoryPanel />}
+          {tab === "mbma" && <MbmaPanel />}
           {tab === "sales-sheets" && <SalesSheetsPanel />}
           {tab === "steel" && <SteelForecastPanel />}
 

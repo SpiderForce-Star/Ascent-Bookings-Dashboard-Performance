@@ -1,0 +1,7 @@
+src/data/mbma/geo.json
+src/routeTree.gen.ts
+dist
+.output
+.vercel
+.nitro
+node_modules

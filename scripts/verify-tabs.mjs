@@ -14,6 +14,7 @@ const tabs = [
   "MBSD",
   "Shipments",
   "Market feeds",
+  "MBMA",
   "Dodge pipeline",
   "Sales forecast",
   "Territory",

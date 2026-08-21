@@ -17,7 +17,7 @@ Interactive executive dashboard for **bookings, margin, live construction market
 
 ## Executive summary
 
-Seven review tabs:
+Review tabs:
 
 1. **Performance** — KPI cards (revenue, YoY growth, volume churn, gross margin), date-range filters, trend charts, monthly + segment breakdown tables. **Real bookings history only** (from the quarterly workbook).
 2. **Market feeds** — **Live** national construction indicators from FRED and BLS, composite commercial index, MoM/YoY moves, history charts. Offline cache fallback if APIs are unreachable.
@@ -31,7 +31,8 @@ Seven review tabs:
    - Live FRED/BLS bias remains on the national case
 5. **Steel cost** — Full port of the Ascent steel 2-year forecast (formerly Streamlit): PEMB/Div 13 material categories, risk engine (tariff / dumping / geo / demand vol), Base vs Risk-Adjusted $/ton paths, MoM, tornado + one-way sensitivity, Excel upload, Excel/PDF/CSV export, **PEMB cost impact** card, and **state steel sheets** for VP → rep handoff. Offline sample data always works.
 6. **Territory** — Portland, TN footprint schematic, state demand scores, pipeline indices, **PEMB share** by state.
-7. **Sales sheets** — VP Sales / Marketing handoff packs: one independent summary sheet per territory state (salesperson, demand, PEMB pipeline, bids due, call list, VP notes, quota placeholder). Print-friendly detail + **Download CSV pack**.
+7. **MBMA** — Metal Building Manufacturers Association **Non-Agriculture Shipment** market intelligence for the six-state focus territory (TX, Northern FL, OH, IN, MO, IL). Static 2025 full-year data. Route: [`/mbma`](./src/routes/mbma.tsx). **Industry-wide MBMA data — not Ascent bookings. Internal use only.**
+8. **Sales sheets** — VP Sales / Marketing handoff packs: one independent summary sheet per territory state (salesperson, demand, PEMB pipeline, bids due, call list, VP notes, quota placeholder). Print-friendly detail + **Download CSV pack**.
 
 > Forecast, territory scores, and state sales-sheet pipeline $ are **planning models**. FRED/BLS are national public statistics. **Dodge project data requires an enterprise license** ([request API access](https://www.construction.com/apis/)). Do **not** treat allocated state forecast $ as booked revenue.
 
@@ -68,6 +69,46 @@ Header rows: fill `#c8102e`, white bold text. Risk uplift ≥3% highlighted in s
 4. Click **Export all state sheets** for an Excel pack (cover + all-states summary + one sheet per state) to email regional reps.
 
 Pair with the **Sales sheets** tab (pipeline / call list / quota) for a full handoff: opportunity context + steel cost narrative.
+
+---
+
+## MBMA territory (market intelligence)
+
+Dedicated page for **MBMA Non-Agriculture Shipment** data (2025 full year, compiled 02/18/2026). Open the **MBMA** tab or go to **`/mbma`**.
+
+This is **industry-wide association data**, not Ascent bookings. Focus territory only — no national map:
+
+| State | YTD $ (000s) | % of national | Rank |
+| --- | ---: | ---: | ---: |
+| Texas | 512,691 | 11.84% | 1 |
+| Florida | 235,554 | 5.44% | 2 |
+| Ohio | 211,442 | 4.88% | 3 |
+| Indiana | 178,702 | 4.13% | 5 |
+| Missouri | 113,687 | 2.63% | 12 |
+| Illinois | 90,615 | 2.09% | 19 |
+
+Combined focus total **$1.34B** (31% of national). Values on the page are in **thousands of dollars**.
+
+The choropleth is a lightweight SVG (no Mapbox / Leaflet). County polygons live in `src/data/mbma/geo.json`.
+
+### Updating the MBMA dataset
+
+When MBMA publishes a new full-year (or Q4 YTD) county file:
+
+1. Place `CountyShip4Q25.pdf` (county detail) and `ShipByState4Q25.xlsx` (state ranks) in `Desktop/MBMA Dashboard info/` — or edit the paths at the top of `scripts/extract-mbma.py`.
+2. Run:
+
+   ```bash
+   python scripts/extract-mbma.py
+   npm test
+   ```
+
+3. Confirm `src/data/mbma/counties.json` still contains **only** TX, FL, OH, IN, MO, IL.
+4. Update the hardcoded state cards in `src/data/mbma/states.ts` (`ytd`, `pctOfNational`, `rank`, quarterly $) from the new state workbook. `NATIONAL_YTD` is the sum of all states in that workbook.
+5. If East Texas / Northern Florida county lists change, edit `src/data/mbma/regions.ts` (FIPS sets). Geometry does not need a refresh unless Census county boundaries change — re-run the extract script to rebuild `geo.json`.
+6. Bump the “Data as of” string (`DATA_AS_OF` in `states.ts`) and the `compiled` field written into `counties.json`.
+
+Do **not** add other states or a national choropleth. Leadership scoped this page to the six-state target territory.
 
 ---
 
@@ -259,6 +300,7 @@ npm install
 npm run dev      # http://localhost:8080 (0.0.0.0:8080)
 npm run build    # production build (Vercel-ready)
 npm run typecheck
+npm test            # MBMA dataset integrity
 ```
 
 Requires **Node 22+**. Dev server binds **0.0.0.0:8080** (see `package.json` and `startup.sh`).
@@ -269,10 +311,11 @@ Requires **Node 22+**. Dev server binds **0.0.0.0:8080** (see `package.json` and
 
 ```
 src/
-  components/dashboard/   # Performance, feeds, Dodge, forecast, territory, sales sheets
+  components/dashboard/   # Performance, feeds, Dodge, forecast, territory, MBMA, sales sheets
   data/
     bookings.ts           # Real monthly bookings / segment history (do not invent state booked $)
     territory.ts          # States, demand, pipeline, PEMB share
+    mbma/                 # MBMA 2025 non-ag shipments (focus territory only)
     sales-sheets.ts       # Per-state salesperson, PEMB opps, call lists, quotas
     forecast.ts           # National + region/state allocation, PEMB, capacity, materials, bid conversion
     steel-forecast.ts     # Steel categories, sample data, risk engine (TS port of forecast_engine.py)
