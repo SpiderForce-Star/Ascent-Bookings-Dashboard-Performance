@@ -20,6 +20,8 @@ import { DodgePanel } from "./dodge-panel";
 import { SalesSheetsPanel } from "./sales-sheets-panel";
 import { SteelForecastPanel } from "./steel-forecast-panel";
 import { BookedShippedStrip, ShipmentsPanel } from "./shipments-panel";
+import { MbsdPanel } from "./mbsd-panel";
+import { MbsdStrip } from "./mbsd-strip";
 import { useConstructionFeeds } from "@/hooks/use-construction-feeds";
 import {
   FileSpreadsheet,
@@ -35,6 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { InstallToDevice } from "@/components/pwa/InstallToDevice";
 import type { DashboardMetrics } from "@/data/bookings";
 
 const defaultPreset = PRESETS.find((p) => p.id === "ytd-2026")!;
@@ -42,6 +45,7 @@ const defaultRange = defaultPreset.range!;
 
 type TabId =
   | "performance"
+  | "mbsd"
   | "shipments"
   | "feeds"
   | "dodge"
@@ -52,6 +56,7 @@ type TabId =
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "performance", label: "Performance", icon: BarChart3 },
+  { id: "mbsd", label: "MBSD", icon: Building2 },
   { id: "shipments", label: "Shipments", icon: Truck },
   { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
@@ -81,7 +86,7 @@ export function Dashboard() {
     <TooltipProvider delayDuration={200}>
       <div className="min-h-dvh bg-[var(--color-bg)]">
         <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]/90 backdrop-blur-md">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <div className="ascent-logo-stage shrink-0">
                 <img
@@ -112,6 +117,7 @@ export function Dashboard() {
                 {feeds.live ? "Feeds live" : "Feeds cached"}
                 <span className="tabular opacity-80">{feeds.signal.compositeIndex.toFixed(0)}</span>
               </Badge>
+              <InstallToDevice />
               <span
                 className="hidden items-center gap-1.5 rounded-full bg-[var(--color-bg-subtle)] px-3 py-1.5 text-xs text-[var(--color-fg-muted)] xl:inline-flex"
                 title="Bookings through July 2026 · live FRED/BLS · territory opportunity board"
@@ -197,12 +203,14 @@ export function Dashboard() {
 
               <KpiCards metrics={metrics} />
               <BoardBriefStrip metrics={metrics} feedsLive={feeds.live} composite={feeds.signal.compositeIndex} />
+              <MbsdStrip />
               <BookedShippedStrip />
               <TrendCharts data={series} />
               <BreakdownTable rows={segments} monthlyRows={series} />
             </>
           )}
 
+          {tab === "mbsd" && <MbsdPanel />}
           {tab === "shipments" && <ShipmentsPanel />}
           {tab === "feeds" && <LiveFeedsPanel />}
           {tab === "dodge" && <DodgePanel />}

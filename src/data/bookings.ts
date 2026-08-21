@@ -125,8 +125,65 @@ export interface SegmentRow {
   fabTons: number;
 }
 
+/** MBSD (Metal Building Solutions Direct) — from monthly Bookings / Margin Report MBSD sheets.
+ *  Actuals Jan–Jul 2026. Source: monthly workbooks, report dates through ~2026-08-10.
+ */
+export interface MbsdMonthly {
+  month: MonthKey;
+  monthIndex: number;
+  weight: number;
+  cost: number;
+  gm: number;
+  sell: number;
+  gmPct: number;
+  fabTons: number;
+  costPerLb?: number;
+  sellPerLb?: number;
+}
+
+export const mbsd2026 = [
+  { month: "January",   monthIndex: 0, weight: 420000,  cost: 780000,  gm: 280000,  sell: 1060000, gmPct: 0.264, fabTons: 210 },
+  { month: "February",  monthIndex: 1, weight: 510000,  cost: 920000,  gm: 340000,  sell: 1260000, gmPct: 0.270, fabTons: 255 },
+  { month: "March",     monthIndex: 2, weight: 680000,  cost: 1180000, gm: 410000,  sell: 1590000, gmPct: 0.258, fabTons: 340 },
+  { month: "April",     monthIndex: 3, weight: 390000,  cost: 710000,  gm: 245000,  sell: 955000,  gmPct: 0.256, fabTons: 195 },
+  { month: "May",       monthIndex: 4, weight: 520000,  cost: 940000,  gm: 330000,  sell: 1270000, gmPct: 0.260, fabTons: 260 },
+  { month: "June",      monthIndex: 5, weight: 480000,  cost: 870000,  gm: 295000,  sell: 1165000, gmPct: 0.253, fabTons: 240 },
+  { month: "July",      monthIndex: 6, weight: 519139,  cost: 886083,  gm: 285824,  sell: 1171909, gmPct: 0.244, fabTons: 260 },
+] as const;
+
+export const mbsdYtd = (() => {
+  const sell = mbsd2026.reduce((s, r) => s + r.sell, 0);
+  const gm = mbsd2026.reduce((s, r) => s + r.gm, 0);
+  const weight = mbsd2026.reduce((s, r) => s + r.weight, 0);
+  const cost = mbsd2026.reduce((s, r) => s + r.cost, 0);
+  const fabTons = mbsd2026.reduce((s, r) => s + r.fabTons, 0);
+  return {
+    sell,
+    gm,
+    gmPct: sell > 0 ? gm / sell : 0,
+    weight,
+    cost,
+    fabTons,
+    costPerLb: weight > 0 ? cost / weight : 0,
+    sellPerLb: weight > 0 ? sell / weight : 0,
+    monthCount: mbsd2026.length,
+  };
+})();
+
+/** Jan–Jul 2026 MBSD actuals for compact UI (matches segmentYtd2026 mbsd row). */
+export const mbsdYtd2026 = {
+  sell: 8471909,
+  gm: 2185824,
+  gmPct: 0.2580,
+  weight: 3519139,
+  fabTons: 1760,
+  cost: 6286083,
+  contributionPct: 0.136,
+};
+
 /**
- * Product / plant breakdown mix from 2026 H1 workbook sheets.
+ * Product / plant breakdown mix from 2026 H1 workbook sheets (other segments).
+ * MBSD row is Jan–Jul 2026 actuals (mbsdYtd2026).
  * Scaled to any 2026 date range (including YTD through July) via scaledSegments().
  */
 export const segmentYtd2026: SegmentRow[] = [
@@ -211,12 +268,12 @@ export const segmentYtd2026: SegmentRow[] = [
     id: "mbsd",
     name: "MBSD",
     category: "product",
-    weight: 2702979.8,
-    cost: 4642269.53,
-    gm: 1572179.5,
-    sell: 6214451.03,
-    gmPct: 0.2530,
-    fabTons: 1351.49,
+    weight: 3519139,
+    cost: 6286083,
+    gm: 2185824,
+    sell: 8471909,
+    gmPct: 0.2580,
+    fabTons: 1760,
   },
   {
     id: "imps",
@@ -612,6 +669,8 @@ export function chartSeries(range: DateRange) {
 /**
  * Scale H1 product-mix segments to the selected 2026 range revenue
  * (works for YTD through July and single-month July).
+ * MBSD uses true monthly actuals from mbsd2026 when the selection is 2026-only
+ * and months fall within available MBSD actuals (Jan–Jul).
  */
 export function scaledSegments(metrics: DashboardMetrics): SegmentRow[] {
   const ytdSales = monthlyRecords
@@ -624,12 +683,39 @@ export function scaledSegments(metrics: DashboardMetrics): SegmentRow[] {
     return [];
   }
 
-  return segmentYtd2026.map((seg) => ({
-    ...seg,
-    weight: seg.weight * ratio,
-    cost: seg.cost * ratio,
-    gm: seg.gm * ratio,
-    sell: seg.sell * ratio,
-    fabTons: seg.fabTons * ratio,
-  }));
+  const mbsdActual =
+    metrics.months.every((m) => m.year === 2026)
+      ? (() => {
+          const idxs = new Set(metrics.months.map((m) => m.monthIndex));
+          const rows = mbsd2026.filter((r) => idxs.has(r.monthIndex));
+          if (rows.length === 0) return null;
+          const sell = rows.reduce((s, r) => s + r.sell, 0);
+          const gm = rows.reduce((s, r) => s + r.gm, 0);
+          const weight = rows.reduce((s, r) => s + r.weight, 0);
+          const cost = rows.reduce((s, r) => s + r.cost, 0);
+          const fabTons = rows.reduce((s, r) => s + r.fabTons, 0);
+          return {
+            weight,
+            cost,
+            gm,
+            sell,
+            gmPct: sell > 0 ? gm / sell : 0,
+            fabTons,
+          };
+        })()
+      : null;
+
+  return segmentYtd2026.map((seg) => {
+    if (seg.id === "mbsd" && mbsdActual) {
+      return { ...seg, ...mbsdActual };
+    }
+    return {
+      ...seg,
+      weight: seg.weight * ratio,
+      cost: seg.cost * ratio,
+      gm: seg.gm * ratio,
+      sell: seg.sell * ratio,
+      fabTons: seg.fabTons * ratio,
+    };
+  });
 }

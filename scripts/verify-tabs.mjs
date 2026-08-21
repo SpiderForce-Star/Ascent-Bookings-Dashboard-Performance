@@ -11,11 +11,14 @@ mkdirSync(outDir, { recursive: true });
 
 const tabs = [
   "Performance",
+  "MBSD",
+  "Shipments",
   "Market feeds",
   "Dodge pipeline",
-  "Forecast",
+  "Sales forecast",
   "Territory",
   "Sales sheets",
+  "Steel cost",
 ];
 
 const consoleErrors = [];

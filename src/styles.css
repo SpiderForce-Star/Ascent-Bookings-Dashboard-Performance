@@ -115,6 +115,16 @@
   }
 }
 
+/* Hide in-app install UI when already running as an installed PWA */
+@media (display-mode: standalone),
+  (display-mode: fullscreen),
+  (display-mode: minimal-ui),
+  (display-mode: window-controls-overlay) {
+  .pwa-install-ui {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
