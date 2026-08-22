@@ -1,13 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Dashboard } from "@/components/dashboard/dashboard";
+import { parseFipsParam } from "@/data/hunts";
 
 export const Route = createFileRoute("/target-attack")({
-  validateSearch: (s: Record<string, unknown>) => {
-    const raw = s.fips;
-    if (raw == null || raw === "") return { fips: undefined as string | undefined };
-    const fips = String(raw).replace(/"/g, "").padStart(5, "0");
-    return { fips: /^\d{5}$/.test(fips) ? fips : undefined };
-  },
+  validateSearch: (s: Record<string, unknown>) => ({
+    fips: parseFipsParam(s.fips),
+  }),
   component: TargetAttackPage,
   head: () => ({
     meta: [

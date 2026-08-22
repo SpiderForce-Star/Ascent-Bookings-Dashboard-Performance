@@ -441,7 +441,7 @@ export function MbmaPanel() {
                         <td className="py-2.5 text-right tabular">{(row.pctOfState * 100).toFixed(1)}%</td>
                         <td className="py-2.5">
                           <a
-                            href={`/target-attack?fips=${row.fips}`}
+                            href={`/target-attack?fips=${encodeURIComponent(row.fips)}`}
                             className="text-xs font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >

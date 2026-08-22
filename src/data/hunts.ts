@@ -5,6 +5,7 @@
 import { plant } from "@/data/territory";
 import {
   COUNTIES,
+  RADAR_STATE_ORDER,
   STATE_BY_CODE,
   type County,
   type RadarStateCode,
@@ -167,6 +168,15 @@ export function huntByFips(fips: string): HuntCounty | undefined {
   return BY_FIPS.get(fips);
 }
 
+/** Accept query fips as string or number; keep Baldwin AL as 01003. */
+export function parseFipsParam(raw: unknown): string | undefined {
+  if (raw == null || raw === "") return undefined;
+  const s = String(raw).replace(/"/g, "").trim();
+  if (!s) return undefined;
+  const fips = s.padStart(5, "0");
+  return /^\d{5}$/.test(fips) ? fips : undefined;
+}
+
 export function isPembHunt(p: DodgeProject): { ok: boolean; typeUnconfirmed: boolean } {
   if (p.buildingType === "agricultural") return { ok: false, typeUnconfirmed: false };
   const stageOk =
@@ -245,7 +255,7 @@ export function buildStateHunts(dodge: HuntProject[]): StateHunt[] {
     byState.set(c.state, list);
   }
 
-  return (Object.keys(SEED_PRIMARY) as RadarStateCode[]).map((state) => {
+  return RADAR_STATE_ORDER.map((state) => {
     const list = (byState.get(state) ?? []).slice().sort((a, b) => scoreCounty(b, dodge) - scoreCounty(a, dodge));
     const seed = SEED_PRIMARY[state];
     let primary = (seed && list.find((c) => c.fips === seed)) || list[0];

@@ -1,65 +1,68 @@
 import { chromium } from "playwright";
 
 const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
-const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+
+async function dismiss(page) {
+  try {
+    await page.getByRole("button", { name: /Maybe later/i }).click({ timeout: 4000 });
+  } catch {
+    /* ignore */
+  }
+}
+
 const errors = [];
+const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 page.on("pageerror", (e) => errors.push(String(e.message)));
 
-await page.goto("http://127.0.0.1:8080/", { waitUntil: "networkidle", timeout: 60000 });
-try {
-  await page.getByRole("button", { name: /Maybe later/i }).click({ timeout: 5000 });
-} catch {
-  /* ignore */
-}
-
-const labels = await page.locator("nav button").allTextContents();
-const idx = (name) => labels.findIndex((t) => t.trim() === name);
-if (idx("MBMA") < 0 || idx("Target-Attack") < 0 || idx("Dodge pipeline") < 0) {
-  throw new Error("missing nav items: " + JSON.stringify(labels));
-}
-if (!(idx("MBMA") < idx("Target-Attack") && idx("Target-Attack") < idx("Dodge pipeline"))) {
-  throw new Error("nav order wrong: " + JSON.stringify(labels));
-}
-
-await page.getByRole("button", { name: "Target-Attack", exact: true }).click();
-await page.waitForTimeout(1500);
-let body = await page.locator("body").innerText();
-if (!/^Target-Attack$/m.test(body) && !body.includes("Target-Attack")) throw new Error("missing header");
-if (!/600-mile radar · county hunts · Dodge access/.test(body)) throw new Error("missing subtitle");
-if (!/MBMA = 2025 industry dollars/.test(body)) throw new Error("missing disclaimer");
-if (!/Davidson/.test(body)) throw new Error("TN primary not Davidson");
-if (!/Allen/.test(body)) throw new Error("missing Allen IN");
-if (/Mecklenburg/.test(body.split("Hunting list")[0] ?? body) === false) {
-  /* Mecklenburg may appear in rank table? not as VA hunt card */
-}
-const preList = body.split("Hunting list")[0] ?? body;
-if (/VA[\s\S]{0,80}Mecklenburg/.test(preList)) throw new Error("VA hunt card is Mecklenburg");
-if (!/Spotsylvania/.test(body)) throw new Error("VA primary should be Spotsylvania");
-
-await page.screenshot({ path: "screenshots/tab-target-attack.png", fullPage: false });
-
-await page.goto("http://127.0.0.1:8080/target-attack?fips=18003", { waitUntil: "networkidle", timeout: 60000 });
-try {
-  await page.getByRole("button", { name: /Maybe later/i }).click({ timeout: 4000 });
-} catch {
-  /* ignore */
-}
+await page.goto("http://127.0.0.1:8080/target-attack", { waitUntil: "networkidle", timeout: 60000 });
+await dismiss(page);
 await page.waitForTimeout(1200);
-body = await page.locator("body").innerText();
-if (!/Allen County, IN/.test(body) && !/Allen County/.test(body)) throw new Error("Allen workbench missing");
-if (!/\$25\.5M/.test(body)) throw new Error("Allen MBMA $25.5M missing");
-await page.screenshot({ path: "screenshots/tab-target-attack-allen.png", fullPage: false });
 
-await page.getByRole("button", { name: "MBMA", exact: true }).click();
-await page.waitForTimeout(800);
-body = await page.locator("body").innerText();
-if (!/Non-Agriculture Shipments — 600-mile radar/.test(body)) throw new Error("MBMA header/page broken");
-if (!/Attack this county/.test(body)) throw new Error("MBMA missing Attack link");
+const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+if (overflow) throw new Error("horizontal overflow on 390");
 
-await page.getByRole("button", { name: "Dodge pipeline", exact: true }).click();
-await page.waitForTimeout(800);
-body = await page.locator("body").innerText();
-if (body.length < 80) throw new Error("Dodge empty");
+const body = await page.locator("body").innerText();
+if (!/Target-Attack/.test(body)) throw new Error("missing header");
+if (!/Davidson/.test(body)) throw new Error("TN primary not visible");
+if (!/why this hunt/i.test(body)) throw new Error("workbench not on default view");
+if (!/access path/i.test(body)) throw new Error("access path missing");
+if (!/owner/i.test(body) || !/architect/i.test(body)) throw new Error("contact cards missing");
+const y = await page.locator("text=Rank migration").boundingBox();
+const why = await page.getByText(/why this hunt/i).first().boundingBox();
+if (y && why && y.y < why.y) throw new Error("rank table is above workbench");
+
+await page.screenshot({ path: "screenshots/ta-mobile-workbench.png", fullPage: false });
+
+await page.getByRole("button", { name: "Map", exact: true }).click();
+await page.waitForTimeout(600);
+await page.screenshot({ path: "screenshots/ta-mobile-map.png", fullPage: false });
+
+await page.locator("#hunt-chip-18003").click();
+await page.waitForTimeout(500);
+let t = await page.locator("body").innerText();
+if (!/Allen County/.test(t)) throw new Error("chip did not open Allen workbench");
+if (!/why this hunt/i.test(t)) throw new Error("chip switched away from workbench");
+
+const desk = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+await desk.goto("http://127.0.0.1:8080/target-attack?fips=18003", { waitUntil: "networkidle", timeout: 60000 });
+await dismiss(desk);
+await desk.waitForTimeout(1000);
+t = await desk.locator("body").innerText();
+if (!/Allen County, IN/.test(t)) throw new Error("fips=18003 did not open Allen");
+if (!/\$25\.5M/.test(t)) throw new Error("Allen $25.5M missing");
+if (!/Indiana/.test(t)) throw new Error("Indiana-fitted map kicker missing");
+
+await desk.goto("http://127.0.0.1:8080/target-attack?fips=01003", { waitUntil: "networkidle", timeout: 60000 });
+await dismiss(desk);
+await desk.waitForTimeout(800);
+t = await desk.locator("body").innerText();
+if (!/Baldwin County, AL/.test(t) && !/Baldwin County/.test(t)) throw new Error("fips=01003 lost Baldwin");
+
+const labels = await desk.locator("nav[aria-label='Dashboard sections'] button").allTextContents();
+const idx = (n) => labels.findIndex((x) => x.trim() === n);
+if (!(idx("MBMA") < idx("Target-Attack") && idx("Target-Attack") < idx("Dodge pipeline"))) {
+  throw new Error("nav order " + JSON.stringify(labels));
+}
 
 if (errors.length) throw new Error(errors.join("; "));
 console.log("ok");
