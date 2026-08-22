@@ -169,10 +169,13 @@ export function formatMbmaActual(value000s: number): string {
   return `$${formatThousands(actual)}`;
 }
 
+/** Sequential light gray → Ascent red. t = sqrt(value / viewMax). */
 export function choroplethFill(value: number, max: number): string {
-  if (value <= 0 || max <= 0) return "var(--color-bg-muted)";
-  const t = Math.sqrt(value / max);
-  return lerpHex("#f4ece8", "#c8102e", Math.min(1, Math.max(0, t)));
+  if (value <= 0 || max <= 0) return "#f3f4f6";
+  const t = Math.min(1, Math.max(0, Math.sqrt(value / max)));
+  if (t < 0.33) return lerpHex("#f3f4f6", "#fecaca", t / 0.33);
+  if (t < 0.66) return lerpHex("#fecaca", "#ef4444", (t - 0.33) / 0.33);
+  return lerpHex("#ef4444", "#c8102e", (t - 0.66) / 0.34);
 }
 
 function lerpHex(a: string, b: string, t: number): string {

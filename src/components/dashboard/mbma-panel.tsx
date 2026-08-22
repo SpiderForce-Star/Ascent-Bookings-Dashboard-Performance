@@ -26,6 +26,7 @@ import {
 } from "@/data/mbma";
 import { cn } from "@/lib/utils";
 import { MbmaMap } from "./mbma-map";
+import { MbmaStateMaps } from "./mbma-state-maps";
 
 type TableSortKey = "rank" | "name" | "state" | "metricValue" | "q1" | "q2" | "q3" | "q4" | "pctOfState";
 
@@ -74,6 +75,14 @@ export function MbmaPanel() {
     () => toCountyRows(filtered.filter((c) => c.state === detailStateCode), filters.metric).slice(0, 12),
     [filtered, detailStateCode, filters.metric],
   );
+
+  const atlasLabel = useMemo(() => {
+    const codes = new Set(filtered.map((c) => c.state));
+    if (codes.size !== 1) return null;
+    const code = [...codes][0]!;
+    const rec = STATE_BY_CODE[code];
+    return rec.northOnly ? "Florida · N. / panhandle" : rec.name;
+  }, [filtered]);
 
   useEffect(() => {
     if (skipTableScroll.current) {
@@ -272,14 +281,21 @@ export function MbmaPanel() {
         </CardContent>
       </Card>
 
+      <MbmaStateMaps
+        metric={filters.metric}
+        isolatedState={
+          filters.isolatedState ?? (filters.region === "northFl" ? "FL" : null)
+        }
+        onIsolate={isolateState}
+      />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>County heat map</CardTitle>
             <CardDescription>
-              600-mile radar only — no national map. Color ={" "}
-              {QUARTER_LABELS.find((q) => q.id === filters.metric)?.label} shipment dollars. Florida is
-              north / panhandle counties only.
+              Projection is fitted to the counties currently in view — not the full radar outline.
+              Florida is north / panhandle only.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -288,10 +304,10 @@ export function MbmaPanel() {
             ) : (
               <MbmaMap
                 counties={filtered}
-                colored={filtered}
                 metric={filters.metric}
                 selectedFips={selectedFips}
                 onSelect={(fips) => setSelectedFips(fips)}
+                isolatedLabel={atlasLabel}
               />
             )}
           </CardContent>
