@@ -1,6 +1,7 @@
 """
-Extract MBMA Non-Agriculture 2025 county shipments for the Ascent focus
-territory (TX, FL, OH, IN, MO, IL) and build a compact SVG choropleth.
+Extract MBMA Non-Agriculture 2025 county shipments for the Ascent ~600-mile
+radar (TN, KY, VA, NC, SC, GA, AL, MS, LA, AR, MO, IL, IN, OH, WV, PA +
+northern/panhandle Florida only). Texas is out of scope. No national map.
 
 Sources (proprietary, internal use only):
   Desktop/MBMA Dashboard info/CountyShip4Q25.pdf
@@ -28,35 +29,80 @@ PDF = Path(r"C:\Users\chris.woodmore\Desktop\MBMA Dashboard info\CountyShip4Q25.
 XLSX = Path(r"C:\Users\chris.woodmore\Desktop\MBMA Dashboard info\ShipByState4Q25.xlsx")
 
 FOCUS = {
+    "01": "AL",
+    "05": "AR",
     "12": "FL",
+    "13": "GA",
     "17": "IL",
     "18": "IN",
+    "21": "KY",
+    "22": "LA",
+    "28": "MS",
     "29": "MO",
+    "37": "NC",
     "39": "OH",
-    "48": "TX",
+    "42": "PA",
+    "45": "SC",
+    "47": "TN",
+    "51": "VA",
+    "54": "WV",
 }
-STATE_NAMES = {
-    "TX": "Texas",
-    "FL": "Florida",
-    "OH": "Ohio",
-    "IN": "Indiana",
-    "MO": "Missouri",
-    "IL": "Illinois",
+
+# Northern / panhandle Florida only — 36 counties. Never Miami-Dade, Broward,
+# Palm Beach, Hillsborough, or the rest of the peninsula.
+NORTH_FL_FIPS = {
+    "12001",  # Alachua
+    "12003",  # Baker
+    "12005",  # Bay
+    "12007",  # Bradford
+    "12013",  # Calhoun
+    "12019",  # Clay
+    "12023",  # Columbia
+    "12029",  # Dixie
+    "12031",  # Duval
+    "12033",  # Escambia
+    "12035",  # Flagler
+    "12037",  # Franklin
+    "12039",  # Gadsden
+    "12041",  # Gilchrist
+    "12045",  # Gulf
+    "12047",  # Hamilton
+    "12059",  # Holmes
+    "12063",  # Jackson
+    "12065",  # Jefferson
+    "12067",  # Lafayette
+    "12073",  # Leon
+    "12075",  # Levy
+    "12077",  # Liberty
+    "12079",  # Madison
+    "12083",  # Marion
+    "12089",  # Nassau
+    "12091",  # Okaloosa
+    "12107",  # Putnam
+    "12109",  # St. Johns
+    "12113",  # Santa Rosa
+    "12121",  # Suwannee
+    "12123",  # Taylor
+    "12125",  # Union
+    "12129",  # Wakulla
+    "12131",  # Walton
+    "12133",  # Washington
 }
 
 # Leadership-specified 2025 YTD checkpoints (000s). Parser must match these.
 CHECKPOINTS = {
-    "48201": 74739,  # Harris TX
+    "51117": 30659,  # Mecklenburg VA
     "18003": 25517,  # Allen IN
     "29077": 22806,  # Greene MO
+    "42079": 22381,  # Luzerne PA
+    "37107": 21965,  # Lenoir NC
+    "01003": 20546,  # Baldwin AL
     "39049": 20297,  # Franklin OH
     "39113": 17971,  # Montgomery OH
     "18097": 17451,  # Marion IN
     "18039": 15418,  # Elkhart IN
     "17031": 15290,  # Cook IL
-    "48291": 14883,  # Liberty TX
-    "48473": 13601,  # Waller TX
-    "48339": 13358,  # Montgomery TX
+    "47037": 11778,  # Davidson TN
     "12031": 7395,  # Duval FL
 }
 
@@ -100,18 +146,19 @@ def extract_counties() -> list[dict]:
             prefix = fips[:2]
             if prefix in FOCUS:
                 q1, q2, q3, q4, ytd = (money(lines[i + k]) for k in range(3, 8))
-                counties.append(
-                    {
-                        "fips": fips,
-                        "name": title_county(lines[i + 1]),
-                        "state": FOCUS[prefix],
-                        "q1": q1,
-                        "q2": q2,
-                        "q3": q3,
-                        "q4": q4,
-                        "ytd": ytd,
-                    }
-                )
+                rec = {
+                    "fips": fips,
+                    "name": title_county(lines[i + 1]),
+                    "state": FOCUS[prefix],
+                    "q1": q1,
+                    "q2": q2,
+                    "q3": q3,
+                    "q4": q4,
+                    "ytd": ytd,
+                }
+                if prefix == "12":
+                    rec["northFl"] = fips in NORTH_FL_FIPS
+                counties.append(rec)
             i += 8
             continue
         i += 1
@@ -243,18 +290,24 @@ def path_from_rings(rings: list[list[tuple[float, float]]], sx, sy, tx, ty) -> s
 
 
 def download_counties_geojson() -> dict:
-    # Census cartographic boundary, 20m (highly generalized — small payload).
+    cache = ROOT / "scripts" / "_counties-geojson-cache.json"
+    if cache.exists():
+        print("Using cached county GeoJSON", cache)
+        return json.loads(cache.read_text(encoding="utf-8"))
     urls = [
-        "https://www2.census.gov/geo/tiger/GENZ2023/geojson/cb_2023_us_county_20m.json",
+        "https://cdn.jsdelivr.net/gh/plotly/datasets@master/geojson-counties-fips.json",
         "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json",
+        "https://www2.census.gov/geo/tiger/GENZ2024/geojson/cb_2024_us_county_20m.geojson",
     ]
     last_err = None
     for url in urls:
         try:
             print("Downloading", url)
             req = urllib.request.Request(url, headers={"User-Agent": "Ascent-MBMA-extract/1.0"})
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                raw = resp.read()
+            cache.write_bytes(raw)
+            return json.loads(raw.decode("utf-8"))
         except Exception as e:  # noqa: BLE001
             last_err = e
             print("  failed:", e)
@@ -332,8 +385,24 @@ def build_geo(counties: list[dict]) -> dict:
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     counties = extract_counties()
+    # Florida on this page is north/panhandle only — drop peninsula.
+    counties = [
+        c
+        for c in counties
+        if c["state"] != "FL" or c.get("northFl")
+    ]
+    banned_fl = {"12086", "12011", "12099", "12057"}  # Miami-Dade, Broward, Palm Beach, Hillsborough
+    if any(c["fips"] in banned_fl for c in counties):
+        raise SystemExit("South Florida counties leaked into radar extract")
+    fl = [c for c in counties if c["state"] == "FL"]
+    fl_ytd = sum(c["ytd"] for c in fl)
+    print(f"N. Florida counties: {len(fl)} YTD {fl_ytd}")
+    if len(fl) != 36:
+        raise SystemExit(f"Expected 36 N.FL counties, got {len(fl)}")
     counties.sort(key=lambda c: (-c["ytd"], c["state"], c["name"]))
     verify(counties)
+    radar = sum(c["ytd"] for c in counties)
+    print("Radar YTD (000s):", radar)
 
     # Cross-check state workbook YTD vs county sums (county PDF can omit a few $)
     wb = openpyxl.load_workbook(XLSX, data_only=True)

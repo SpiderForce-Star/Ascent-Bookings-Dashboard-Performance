@@ -31,7 +31,7 @@ Review tabs:
    - Live FRED/BLS bias remains on the national case
 5. **Steel cost** — Full port of the Ascent steel 2-year forecast (formerly Streamlit): PEMB/Div 13 material categories, risk engine (tariff / dumping / geo / demand vol), Base vs Risk-Adjusted $/ton paths, MoM, tornado + one-way sensitivity, Excel upload, Excel/PDF/CSV export, **PEMB cost impact** card, and **state steel sheets** for VP → rep handoff. Offline sample data always works.
 6. **Territory** — Portland, TN footprint schematic, state demand scores, pipeline indices, **PEMB share** by state.
-7. **MBMA** — Metal Building Manufacturers Association **Non-Agriculture Shipment** market intelligence for the six-state focus territory (TX, Northern FL, OH, IN, MO, IL). Static 2025 full-year data. Route: [`/mbma`](./src/routes/mbma.tsx). **Industry-wide MBMA data — not Ascent bookings. Internal use only.**
+7. **MBMA** — Metal Building Manufacturers Association **Non-Agriculture Shipment** market intelligence for the **~600-mile radar** from Portland, TN (17 states + northern/panhandle Florida only). Static 2025 full-year data. Route: [`/mbma`](./src/routes/mbma.tsx). **Industry-wide MBMA data — not Ascent bookings. Internal use only.**
 8. **Sales sheets** — VP Sales / Marketing handoff packs: one independent summary sheet per territory state (salesperson, demand, PEMB pipeline, bids due, call list, VP notes, quota placeholder). Print-friendly detail + **Download CSV pack**.
 
 > Forecast, territory scores, and state sales-sheet pipeline $ are **planning models**. FRED/BLS are national public statistics. **Dodge project data requires an enterprise license** ([request API access](https://www.construction.com/apis/)). Do **not** treat allocated state forecast $ as booked revenue.
@@ -74,20 +74,11 @@ Pair with the **Sales sheets** tab (pipeline / call list / quota) for a full han
 
 ## MBMA territory (market intelligence)
 
-Dedicated page for **MBMA Non-Agriculture Shipment** data (2025 full year, compiled 02/18/2026). Open the **MBMA** tab or go to **`/mbma`**.
+Dedicated page for **MBMA Non-Agriculture Shipment** data (2025 full year, compiled 02/18/2026). Open the **MBMA** tab (between Market feeds and Dodge pipeline) or go to **`/mbma`**.
 
-This is **industry-wide association data**, not Ascent bookings. Focus territory only — no national map:
+This is **industry-wide association data**, not Ascent bookings. Geography is the **~600-mile radar** from the Portland, TN plant. No national map. **Texas is not on this page.** Florida is **north / panhandle counties only** (~$55.6M), never full-state $235.6M.
 
-| State | YTD $ (000s) | % of national | Rank |
-| --- | ---: | ---: | ---: |
-| Texas | 512,691 | 11.84% | 1 |
-| Florida | 235,554 | 5.44% | 2 |
-| Ohio | 211,442 | 4.88% | 3 |
-| Indiana | 178,702 | 4.13% | 5 |
-| Missouri | 113,687 | 2.63% | 12 |
-| Illinois | 90,615 | 2.09% | 19 |
-
-Combined focus total **$1.34B** (31% of national). Values on the page are in **thousands of dollars**.
+Radar total **$1.96B** (45.37% of U.S. $4.33B). Source unit is $000s; the UI displays $1.96B / $30.7M / $7.4M.
 
 The choropleth is a lightweight SVG (no Mapbox / Leaflet). County polygons live in `src/data/mbma/geo.json`.
 
@@ -95,7 +86,7 @@ The choropleth is a lightweight SVG (no Mapbox / Leaflet). County polygons live 
 
 When MBMA publishes a new full-year (or Q4 YTD) county file:
 
-1. Place `CountyShip4Q25.pdf` (county detail) and `ShipByState4Q25.xlsx` (state ranks) in `Desktop/MBMA Dashboard info/` — or edit the paths at the top of `scripts/extract-mbma.py`.
+1. Place the county PDF and state workbook in `Desktop/MBMA Dashboard info/` — or edit the paths at the top of `scripts/extract-mbma.py`.
 2. Run:
 
    ```bash
@@ -103,12 +94,12 @@ When MBMA publishes a new full-year (or Q4 YTD) county file:
    npm test
    ```
 
-3. Confirm `src/data/mbma/counties.json` still contains **only** TX, FL, OH, IN, MO, IL.
-4. Update the hardcoded state cards in `src/data/mbma/states.ts` (`ytd`, `pctOfNational`, `rank`, quarterly $) from the new state workbook. `NATIONAL_YTD` is the sum of all states in that workbook.
-5. If East Texas / Northern Florida county lists change, edit `src/data/mbma/regions.ts` (FIPS sets). Geometry does not need a refresh unless Census county boundaries change — re-run the extract script to rebuild `geo.json`.
-6. Bump the “Data as of” string (`DATA_AS_OF` in `states.ts`) and the `compiled` field written into `counties.json`.
+3. Confirm `src/data/mbma/counties.json` contains **only** the 17 radar states, Florida is 36 north/panhandle counties, and Texas is absent.
+4. National ranks live in `src/data/mbma/states.ts` (`STATE_META`). Dollar rollups come from the county file (FL denom = north/panhandle).
+5. North Florida FIPS live in `src/data/mbma/regions.ts`. Re-run the extract script to rebuild `geo.json` if county boundaries change.
+6. Bump `DATA_AS_OF` in `states.ts` and the `compiled` field written into `counties.json`.
 
-Do **not** add other states or a national choropleth. Leadership scoped this page to the six-state target territory.
+Do **not** add a 50-state map, East Texas, or Ascent-vs-MBMA share of market until bookings are tagged by county.
 
 ---
 

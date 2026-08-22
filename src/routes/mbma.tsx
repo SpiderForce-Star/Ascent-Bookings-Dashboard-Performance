@@ -9,7 +9,7 @@ export const Route = createFileRoute("/mbma")({
       {
         name: "description",
         content:
-          "MBMA Non-Agriculture Shipments — target territory market intelligence for Ascent Buildings. Internal use only.",
+          "MBMA Non-Agriculture Shipments — 600-mile radar market intelligence. Industry-wide data, not Ascent bookings. Internal use only.",
       },
     ],
   }),

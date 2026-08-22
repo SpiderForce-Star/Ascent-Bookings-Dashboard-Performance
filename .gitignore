@@ -16,3 +16,4 @@ screenshots
 .playwright
 *.local
 .tools
+scripts/_counties-geojson-cache.json
