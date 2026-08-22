@@ -35,8 +35,10 @@ import {
   Flame,
   Truck,
   Globe,
+  Crosshair,
 } from "lucide-react";
 import { MbmaPanel } from "./mbma-panel";
+import { TargetAttackPanel } from "./target-attack-panel";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { InstallToDevice } from "@/components/pwa/InstallToDevice";
@@ -54,6 +56,7 @@ type TabId =
   | "forecast"
   | "territory"
   | "mbma"
+  | "target-attack"
   | "sales-sheets"
   | "steel";
 
@@ -63,6 +66,7 @@ const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "shipments", label: "Shipments", icon: Truck },
   { id: "feeds", label: "Market feeds", icon: Radio },
   { id: "mbma", label: "MBMA", icon: Globe },
+  { id: "target-attack", label: "Target-Attack", icon: Crosshair },
   { id: "dodge", label: "Dodge pipeline", icon: GanttChartSquare },
   { id: "forecast", label: "Sales forecast", icon: LineChart },
   { id: "territory", label: "Territory", icon: MapPin },
@@ -70,7 +74,15 @@ const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "steel", label: "Steel cost", icon: Flame },
 ];
 
-export function Dashboard({ initialTab = "performance" }: { initialTab?: TabId }) {
+export function Dashboard({
+  initialTab = "performance",
+  initialHuntFips,
+  initialDodgeProject,
+}: {
+  initialTab?: TabId;
+  initialHuntFips?: string;
+  initialDodgeProject?: string;
+}) {
   const [preset, setPreset] = useState<DatePreset>("ytd-2026");
   const [range, setRange] = useState<DateRange>(defaultRange);
   const [tab, setTab] = useState<TabId>(initialTab);
@@ -217,7 +229,8 @@ export function Dashboard({ initialTab = "performance" }: { initialTab?: TabId }
           {tab === "mbsd" && <MbsdPanel />}
           {tab === "shipments" && <ShipmentsPanel />}
           {tab === "feeds" && <LiveFeedsPanel />}
-          {tab === "dodge" && <DodgePanel />}
+          {tab === "target-attack" && <TargetAttackPanel initialFips={initialHuntFips} />}
+          {tab === "dodge" && <DodgePanel focusProjectId={initialDodgeProject} />}
           {tab === "forecast" && <ForecastPanel />}
           {tab === "territory" && <TerritoryPanel />}
           {tab === "mbma" && <MbmaPanel />}

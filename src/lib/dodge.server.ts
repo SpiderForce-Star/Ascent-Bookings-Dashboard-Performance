@@ -30,6 +30,7 @@ import {
   type DodgeProjectStage,
   type DodgeProjectsResponse,
 } from "@/data/dodge";
+import { lookupFips } from "@/data/dodge-fips";
 
 const DEFAULT_MAX_MILES = 600;
 const DEFAULT_MIN_VALUATION = 1_000_000;
@@ -305,6 +306,10 @@ export function mapProject(raw: Record<string, unknown>, index: number): DodgePr
     ),
     city,
     state,
+    fips:
+      str("fips", "countyFips", "county_fips", "geoid", "countyGEOID") ??
+      lookupFips(city, state) ??
+      undefined,
     milesFromPlant:
       asNum(dig(raw, "milesFromPlant"), dig(raw, "distanceMiles"), dig(raw, "distance")) ||
       estimateMiles(state, city),

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,7 @@ function isBidWithinDays(iso: string | null, days: number): boolean {
   return t >= now - 86_400_000 && t <= horizon;
 }
 
-export function DodgePanel() {
+export function DodgePanel({ focusProjectId }: { focusProjectId?: string }) {
   const { data, loading, error, refresh } = useDodgeProjects(true);
   const { dismissedIds, dismissedCount, dismiss, restore, restoreAll, resetDismissed, isDismissed } =
     useDodgeDismissed();
@@ -71,6 +71,12 @@ export function DodgePanel() {
   const [boardTab, setBoardTab] = useState<BoardTab>("active");
   const [top10, setTop10] = useState(false);
   const [bid30, setBid30] = useState(false);
+
+  useEffect(() => {
+    if (!focusProjectId) return;
+    const el = document.getElementById(`dodge-project-${focusProjectId}`);
+    el?.scrollIntoView({ block: "center" });
+  }, [focusProjectId, data.projects]);
 
   const activeSource = useMemo(
     () => data.projects.filter((p) => !isDismissed(p.id)),
@@ -470,6 +476,7 @@ export function DodgePanel() {
                   project={p}
                   mode={boardTab}
                   muted={boardTab === "removed"}
+                  focused={p.id === focusProjectId}
                   onDismiss={() => handleDismiss(p.id, p.title)}
                   onRestore={() => restore(p.id)}
                 />
@@ -617,20 +624,24 @@ function ProjectRow({
   project: p,
   mode,
   muted,
+  focused,
   onDismiss,
   onRestore,
 }: {
   project: DodgeProject;
   mode: BoardTab;
   muted?: boolean;
+  focused?: boolean;
   onDismiss: () => void;
   onRestore: () => void;
 }) {
   return (
     <tr
+      id={`dodge-project-${p.id}`}
       className={cn(
         "border-b border-[var(--color-border)]/70 align-top transition-colors hover:bg-[var(--color-bg-subtle)]/50",
         muted && "opacity-75",
+        focused && "bg-[var(--color-primary-soft)]",
       )}
       title={p.notes}
     >

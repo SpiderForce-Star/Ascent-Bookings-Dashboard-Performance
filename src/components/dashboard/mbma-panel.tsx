@@ -27,6 +27,9 @@ import {
 import { cn } from "@/lib/utils";
 import { MbmaMap } from "./mbma-map";
 import { MbmaStateMaps } from "./mbma-state-maps";
+import { countyFlags } from "@/data/hunts";
+import { pembHuntProjects } from "@/data/hunts";
+import { useDodgeProjects } from "@/hooks/use-dodge-projects";
 
 type TableSortKey = "rank" | "name" | "state" | "metricValue" | "q1" | "q2" | "q3" | "q4" | "pctOfState";
 
@@ -40,6 +43,8 @@ export function MbmaPanel() {
   const [sortKey, setSortKey] = useState<TableSortKey>("metricValue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const skipTableScroll = useRef(true);
+  const { data: dodgeData } = useDodgeProjects(true);
+  const dodgeInView = useMemo(() => pembHuntProjects(dodgeData.projects).length, [dodgeData.projects]);
 
   const filtered = useMemo(() => filterCounties(COUNTIES, filters), [filters]);
   const rows = useMemo(() => {
@@ -191,6 +196,12 @@ export function MbmaPanel() {
           note="U.S. MBMA non-ag YTD · context only"
         />
       </div>
+      <p className="text-sm text-[var(--color-fg-muted)]">
+        <a href="/target-attack" className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline">
+          {dodgeInView} live Dodge projects in view → Target-Attack
+        </a>
+        <span className="text-[var(--color-fg-subtle)]"> · hunts only, not bookings</span>
+      </p>
 
       <Card>
         <CardContent className="space-y-3 p-4 sm:p-5">
@@ -383,12 +394,14 @@ export function MbmaPanel() {
                     <Th k="rank" label="Rank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                     <Th k="name" label="County" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                     <Th k="state" label="State" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                    <th className="py-2 pr-3 font-medium">Flags</th>
                     <Th k="metricValue" label="Volume" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
                     <Th k="q1" label="Q1" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
                     <Th k="q2" label="Q2" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
                     <Th k="q3" label="Q3" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
                     <Th k="q4" label="Q4" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
                     <Th k="pctOfState" label="% of state" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
+                    <th className="py-2 font-medium">Hunt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -407,6 +420,11 @@ export function MbmaPanel() {
                         <td className="py-2.5 pr-3 tabular text-[var(--color-fg-muted)]">{row.rank}</td>
                         <td className="py-2.5 pr-3 font-medium">{row.name}</td>
                         <td className="py-2.5 pr-3 text-[var(--color-fg-muted)]">{row.state}</td>
+                        <td className="py-2.5 pr-3">
+                          <span className="text-[10px] capitalize text-[var(--color-fg-muted)]">
+                            {countyFlags(row, STATE_BY_CODE[row.state]?.ytd ?? 0).join(" · ")}
+                          </span>
+                        </td>
                         <td className="py-2.5 pr-3 text-right tabular">{formatMbmaActual(row.metricValue)}</td>
                         <td className="py-2.5 pr-3 text-right tabular text-[var(--color-fg-muted)]">
                           {formatMbmaActual(row.q1)}
@@ -421,6 +439,15 @@ export function MbmaPanel() {
                           {formatMbmaActual(row.q4)}
                         </td>
                         <td className="py-2.5 text-right tabular">{(row.pctOfState * 100).toFixed(1)}%</td>
+                        <td className="py-2.5">
+                          <a
+                            href={`/target-attack?fips=${row.fips}`}
+                            className="text-xs font-medium text-[var(--color-primary)] underline-offset-2 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Attack this county
+                          </a>
+                        </td>
                       </tr>
                     );
                   })}

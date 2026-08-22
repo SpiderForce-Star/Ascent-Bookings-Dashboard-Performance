@@ -48,6 +48,8 @@ export interface DodgeProject {
   valuation: number;
   city: string;
   state: string;
+  /** 5-digit county FIPS when known (geocoded city/county). Join key to MBMA. */
+  fips?: string | null;
   /** Miles from Portland, TN plant (approx) */
   milesFromPlant: number;
   bidDate: string | null;
